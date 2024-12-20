@@ -13,75 +13,112 @@ import {
     WalletPluginSignResponse,
 } from '@wharfkit/session'
 
-export class WalletPluginTEMPLATE extends AbstractWalletPlugin implements WalletPlugin {
+interface WebAuthenticatorOptions {
+    /** The URL of the web authenticator service */
+    url?: string
+}
+
+export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implements WalletPlugin {
+    private baseUrl: string
+
+    constructor(options: WebAuthenticatorOptions = {}) {
+        super()
+        this.baseUrl = options.url || 'http://localhost:5174'
+    }
+
     /**
      * The logic configuration for the wallet plugin.
      */
     readonly config: WalletPluginConfig = {
-        // Should the user interface display a chain selector?
+        // Allow chain selection since the web authenticator may support multiple chains
         requiresChainSelect: true,
-
-        // Should the user interface display a permission selector?
-        requiresPermissionSelect: false,
-
-        // Optionally specify if this plugin only works with specific blockchains.
-        // supportedChains: ['73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d']
+        // Allow permission selection
+        requiresPermissionSelect: true,
     }
+
     /**
      * The metadata for the wallet plugin to be displayed in the user interface.
      */
     readonly metadata: WalletPluginMetadata = WalletPluginMetadata.from({
-        name: 'Wallet Plugin Template',
-        description: 'A template that can be used to build wallet plugins!',
-        logo: 'base_64_encoded_image',
-        homepage: 'https://someplace.com',
-        download: 'https://someplace.com/download',
+        name: 'Web Authenticator',
+        description: 'Sign transactions using a web-based authenticator',
+        logo: 'data:image/svg+xml,<svg></svg>', // TODO: Add proper logo
+        homepage: 'https://github.com/your-org/wallet-plugin-web-authenticator',
     })
+
     /**
-     * A unique string identifier for this wallet plugin.
-     *
-     * It's recommended this is all lower case, no spaces, and only URL-friendly special characters (dashes, underscores, etc)
+     * Unique identifier for this wallet plugin
      */
     get id(): string {
-        return 'wallet-plugin-template'
+        return 'web-authenticator'
     }
+
     /**
-     * Performs the wallet logic required to login and return the chain and permission level to use.
-     *
-     * @param options WalletPluginLoginOptions
-     * @returns Promise<WalletPluginLoginResponse>
+     * Opens a popup window with the given URL and waits for it to complete
      */
-    // TODO: Remove these eslint rule modifiers when you are implementing this method.
-    /* eslint-disable @typescript-eslint/no-unused-vars */
+    private async openPopup(url: string): Promise<any> {
+        return new Promise((resolve, reject) => {
+            const popup = window.open(url, 'Web Authenticator', 'width=800,height=600')
+            
+            if (!popup) {
+                reject(new Error('Popup blocked - please enable popups for this site'))
+                return
+            }
+
+            const checkClosed = setInterval(() => {
+                if (popup.closed) {
+                    clearInterval(checkClosed)
+                    reject(new Error('Authentication cancelled'))
+                }
+            }, 1000)
+
+            window.addEventListener('message', function handler(event) {
+                // Verify origin matches our authenticator URL
+                if (event.origin !== this.baseUrl) {
+                    return
+                }
+
+                window.removeEventListener('message', handler)
+                clearInterval(checkClosed)
+                popup.close()
+                resolve(event.data)
+            })
+        })
+    }
+
+    /**
+     * Performs login by opening the web authenticator in a popup
+     */
     async login(context: LoginContext): Promise<WalletPluginLoginResponse> {
-        // Example response...
-        return {
-            chain: Checksum256.from(
-                '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d'
-            ),
-            permissionLevel: PermissionLevel.from('wharfkit1111@test'),
+        try {
+            const loginUrl = `${this.baseUrl}/sign?esr=${encodeURIComponent(context.request.encode())}`
+            const response = await this.openPopup(loginUrl)
+            
+            return {
+                chain: response.chain,
+                permissionLevel: PermissionLevel.from(response.permissionLevel),
+            }
+        } catch (error) {
+            throw new Error(`Login failed: ${error.message}`)
         }
     }
+
     /**
-     * Performs the wallet logic required to sign a transaction and return the signature.
-     *
-     * @param chain ChainDefinition
-     * @param resolved ResolvedSigningRequest
-     * @returns Promise<Signature>
+     * Signs a transaction by opening the web authenticator in a popup
      */
-    // TODO: Remove these eslint rule modifiers when you are implementing this method.
-    /* eslint-disable @typescript-eslint/no-unused-vars */
     async sign(
         resolved: ResolvedSigningRequest,
         context: TransactContext
     ): Promise<WalletPluginSignResponse> {
-        // Example response...
-        return {
-            signatures: [
-                Signature.from(
-                    'SIG_K1_KfqBXGdSRnVgZbAXyL9hEYbAvrZjcaxUCenD7Z3aX6yzf6MEyc4Cy3ywToD4j3SKkzSg7L1uvRUirEPHwAwrbg5c9z27Z3'
-                ),
-            ],
+        try {
+            const signUrl = `${this.baseUrl}/sign?esr=${encodeURIComponent(resolved.request.encode())}`
+            const response = await this.openPopup(signUrl)
+
+            return {
+                signatures: response.signatures.map((sig: string) => Signature.from(sig)),
+            }
+        } catch (error) {
+            throw new Error(`Signing failed: ${error.message}`)
         }
     }
 }

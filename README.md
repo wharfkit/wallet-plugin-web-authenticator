@@ -1,8 +1,8 @@
-# @wharfkit/wallet-plugin-template
+# Web Authenticator Wallet Plugin for Wharf
 
-A template to create a `WalletPlugin` for use within the `@wharfkit/session` library.
+A wallet plugin for Wharf that allows signing transactions using a web-based authenticator service.
 
-## Usage
+## Installation
 
 -   [Use this as a template.](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template)
 -   Write your wallet plugin's logic.
