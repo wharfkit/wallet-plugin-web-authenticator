@@ -72,9 +72,10 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 }
             }, 1000)
 
-            window.addEventListener('message', function handler(event) {
+            const baseUrlOrigin = new URL(this.baseUrl).origin
+            const handler = (event: MessageEvent) => {
                 // Verify origin matches our authenticator URL
-                if (event.origin !== this.baseUrl) {
+                if (event.origin !== baseUrlOrigin) {
                     return
                 }
 
@@ -82,7 +83,9 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 clearInterval(checkClosed)
                 popup.close()
                 resolve(event.data)
-            })
+            }
+
+            window.addEventListener('message', handler)
         })
     }
 
@@ -91,15 +94,18 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
      */
     async login(context: LoginContext): Promise<WalletPluginLoginResponse> {
         try {
-            const loginUrl = `${this.baseUrl}/sign?esr=${encodeURIComponent(context.request.encode())}`
+            const loginUrl = `${this.baseUrl}/sign?chain=${context.chain}&permissionLevel=${context.permissionLevel}`
             const response = await this.openPopup(loginUrl)
             
             return {
-                chain: response.chain,
+                chain: Checksum256.from(response.chain),
                 permissionLevel: PermissionLevel.from(response.permissionLevel),
             }
-        } catch (error) {
-            throw new Error(`Login failed: ${error.message}`)
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                throw new Error(`Login failed: ${error.message}`)
+            }
+            throw new Error('Login failed: Unknown error')
         }
     }
 
@@ -117,8 +123,11 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             return {
                 signatures: response.signatures.map((sig: string) => Signature.from(sig)),
             }
-        } catch (error) {
-            throw new Error(`Signing failed: ${error.message}`)
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                throw new Error(`Signing failed: ${error.message}`)
+            }
+            throw new Error('Signing failed: Unknown error')
         }
     }
 }
