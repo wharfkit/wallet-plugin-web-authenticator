@@ -1,3 +1,4 @@
+import {createIdentityRequest} from '@wharfkit/protocol-esr'
 import {
     AbstractWalletPlugin,
     Checksum256,
@@ -15,15 +16,15 @@ import {
 
 interface WebAuthenticatorOptions {
     /** The URL of the web authenticator service */
-    url?: string
+    webAuthenticatorUrl?: string
 }
 
 export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implements WalletPlugin {
-    private baseUrl: string
+    private webAuthenticatorUrl: string
 
     constructor(options: WebAuthenticatorOptions = {}) {
         super()
-        this.baseUrl = options.url || 'http://localhost:5174'
+        this.webAuthenticatorUrl = options.webAuthenticatorUrl || 'http://localhost:5174'
     }
 
     /**
@@ -31,9 +32,9 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
      */
     readonly config: WalletPluginConfig = {
         // Allow chain selection since the web authenticator may support multiple chains
-        requiresChainSelect: true,
+        requiresChainSelect: false,
         // Allow permission selection
-        requiresPermissionSelect: true,
+        requiresPermissionSelect: false,
     }
 
     /**
@@ -42,8 +43,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     readonly metadata: WalletPluginMetadata = WalletPluginMetadata.from({
         name: 'Web Authenticator',
         description: 'Sign transactions using a web-based authenticator',
-        logo: 'data:image/svg+xml,<svg></svg>', // TODO: Add proper logo
-        homepage: 'https://github.com/your-org/wallet-plugin-web-authenticator',
+        homepage: 'https://github.com/wharfkit/wallet-plugin-web-authenticator',
     })
 
     /**
@@ -59,7 +59,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     private async openPopup(url: string): Promise<any> {
         return new Promise((resolve, reject) => {
             const popup = window.open(url, 'Web Authenticator', 'width=800,height=600')
-            
+
             if (!popup) {
                 reject(new Error('Popup blocked - please enable popups for this site'))
                 return
@@ -72,7 +72,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 }
             }, 1000)
 
-            const baseUrlOrigin = new URL(this.baseUrl).origin
+            const baseUrlOrigin = new URL(this.webAuthenticatorUrl).origin
             const handler = (event: MessageEvent) => {
                 // Verify origin matches our authenticator URL
                 if (event.origin !== baseUrlOrigin) {
@@ -94,9 +94,13 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
      */
     async login(context: LoginContext): Promise<WalletPluginLoginResponse> {
         try {
-            const loginUrl = `${this.baseUrl}/sign?chain=${context.chain}&permissionLevel=${context.permissionLevel}`
+            // Create the identity request to be presented to the user
+            const {request} = await createIdentityRequest(context, '')
+            const loginUrl = `${this.webAuthenticatorUrl}/sign?esr=${request.encode()}&chain=${
+                context.chain?.name
+            }`
             const response = await this.openPopup(loginUrl)
-            
+
             return {
                 chain: Checksum256.from(response.chain),
                 permissionLevel: PermissionLevel.from(response.permissionLevel),
@@ -114,10 +118,12 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
      */
     async sign(
         resolved: ResolvedSigningRequest,
-        context: TransactContext
+        _context: TransactContext
     ): Promise<WalletPluginSignResponse> {
         try {
-            const signUrl = `${this.baseUrl}/sign?esr=${encodeURIComponent(resolved.request.encode())}`
+            const signUrl = `${this.webAuthenticatorUrl}/sign?esr=${encodeURIComponent(
+                resolved.request.encode()
+            )}`
             const response = await this.openPopup(signUrl)
 
             return {
