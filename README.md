@@ -1,19 +1,116 @@
 # Web Authenticator Wallet Plugin for Wharf
 
-A wallet plugin for Wharf that allows signing transactions using a web-based authenticator service.
+> ⚠️ **WARNING**: This project is currently under development and not ready for production use. Use at your own risk.
+
+A wallet plugin for Wharf that allows signing transactions using a web-based authenticator service. This plugin opens a popup window to handle authentication and transaction signing through a web interface.
+
+## Features
+
+-   Web-based authentication flow
+-   Popup window interface for secure interaction
+-   Support for transaction signing
+-   Currently only supports Jungle 4 testnet
+-   Configurable web authenticator URL
 
 ## Installation
 
--   [Use this as a template.](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template)
--   Write your wallet plugin's logic.
--   Publish it on Github or npmjs.com
--   Include it in your project and use it.
+```bash
+yarn add @wharfkit/wallet-plugin-web-authenticator
+```
 
-## Developing
+## Usage
+
+```typescript
+import { SessionKit } from '@wharfkit/session'
+import { WalletPluginWebAuthenticator } from '@wharfkit/wallet-plugin-web-authenticator'
+
+// Initialize the wallet plugin
+const webAuthenticator = new WalletPluginWebAuthenticator({
+    webAuthenticatorUrl: 'https://your-authenticator-url.com' // Optional, defaults to http://localhost:5174
+})
+
+// Create a new SessionKit instance with the plugin
+const sessionKit = new SessionKit({
+    appName: 'your-app',
+    chains: [...],
+    walletPlugins: [webAuthenticator]
+})
+```
+
+## Configuration
+
+The plugin accepts the following configuration options:
+
+```typescript
+interface WebAuthenticatorOptions {
+    webAuthenticatorUrl?: string // The URL of your web authenticator service
+}
+```
+
+## Web Authenticator Requirements
+
+Your web authenticator service should implement the following endpoints:
+
+-   `/sign` - Handles both login requests and transaction signing
+    -   Query Parameters:
+        -   `esr` - The encoded signing request
+        -   `chain` - The chain name
+        -   `accountName` - (Only for signing) The account name
+        -   `permissionName` - (Only for signing) The permission name
+
+The authenticator should respond by posting a message to the opener window with the following format:
+
+For login:
+
+```typescript
+{
+    payload: {
+        cid: string // Chain ID
+        sa: string // Signing account
+        sp: string // Signing permission
+    }
+}
+```
+
+For signing:
+
+```typescript
+{
+    signatures: string[]  // Array of signatures
+}
+```
+
+## Development
 
 You need [Make](https://www.gnu.org/software/make/), [node.js](https://nodejs.org/en/) and [yarn](https://classic.yarnpkg.com/en/docs/install) installed.
 
-Clone the repository and run `make` to checkout all dependencies and build the project. See the [Makefile](./Makefile) for other useful targets. Before submitting a pull request make sure to run `make lint`.
+1. Clone the repository
+2. Install dependencies:
+    ```bash
+    yarn install
+    ```
+3. Build the project:
+    ```bash
+    make
+    ```
+4. Run tests:
+    ```bash
+    make test
+    ```
+
+See the [Makefile](./Makefile) for other useful targets. Before submitting a pull request make sure to run `make lint`.
+
+## Security Considerations
+
+-   The plugin verifies the origin of messages from the popup window against the configured authenticator URL
+-   Popups must be enabled in the user's browser
+-   The web authenticator service should implement appropriate security measures
+
+## Limitations
+
+-   Currently only supports the Jungle 4 testnet chain
+-   Requires popup windows to be enabled in the browser
+-   Web authenticator service must be available and properly configured
 
 ---
 
