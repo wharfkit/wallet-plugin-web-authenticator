@@ -65,7 +65,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
      */
     private async openPopup(url: string): Promise<any> {
         return new Promise((resolve, reject) => {
-            const popup = window.open(url, 'Web Authenticator', 'width=800,height=600')
+            const popup = window.open(url, 'Web Authenticator', 'width=400,height=600')
 
             if (!popup) {
                 reject(new Error('Popup blocked - please enable popups for this site'))
@@ -143,18 +143,9 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             }`
             const response = await this.openPopup(signUrl)
 
-            console.log('response', response)
-
             const wasSuccessful =
                 isCallback(response.payload) &&
                 extractSignaturesFromCallback(response.payload).length > 0
-
-            console.log('wasSuccessful', wasSuccessful)
-            console.log('isCallback', isCallback(response.payload))
-            console.log(
-                'extractSignaturesFromCallback',
-                extractSignaturesFromCallback(response.payload)
-            )
 
             if (wasSuccessful) {
                 // If the callback was resolved, create a new request from the response
@@ -163,8 +154,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                     context.esrOptions
                 )
 
-                console.log('resolvedRequest', resolvedRequest)
-
                 // Return the new request and the signatures from the wallet
                 return {
                     signatures: extractSignaturesFromCallback(response.payload),
@@ -172,10 +161,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 }
             } else {
                 throw new Error('Signing failed: No signatures returned')
-            }
-
-            return {
-                signatures: response.signatures.map((sig: string) => Signature.from(sig)),
             }
         } catch (error: unknown) {
             if (error instanceof Error) {
