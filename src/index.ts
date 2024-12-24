@@ -1,4 +1,8 @@
-import {createIdentityRequest} from '@wharfkit/protocol-esr'
+import {
+    createIdentityRequest,
+    extractSignaturesFromCallback,
+    isCallback,
+} from '@wharfkit/protocol-esr'
 import {
     AbstractWalletPlugin,
     Checksum256,
@@ -134,6 +138,37 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 context.permissionName
             }`
             const response = await this.openPopup(signUrl)
+
+            console.log('response', response)
+
+            const wasSuccessful =
+                isCallback(response.payload) &&
+                extractSignaturesFromCallback(response.payload).length > 0
+
+            console.log('wasSuccessful', wasSuccessful)
+            console.log('isCallback', isCallback(response.payload))
+            console.log(
+                'extractSignaturesFromCallback',
+                extractSignaturesFromCallback(response.payload)
+            )
+
+            if (wasSuccessful) {
+                // If the callback was resolved, create a new request from the response
+                const resolvedRequest = await ResolvedSigningRequest.fromPayload(
+                    response.payload,
+                    context.esrOptions
+                )
+
+                console.log('resolvedRequest', resolvedRequest)
+
+                // Return the new request and the signatures from the wallet
+                return {
+                    signatures: extractSignaturesFromCallback(response.payload),
+                    resolved: resolvedRequest,
+                }
+            } else {
+                throw new Error('Signing failed: No signatures returned')
+            }
 
             return {
                 signatures: response.signatures.map((sig: string) => Signature.from(sig)),
