@@ -35,6 +35,8 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
         requiresChainSelect: false,
         // Allow permission selection
         requiresPermissionSelect: false,
+        // Currently only supports Jungle 4:
+        supportedChains: ['73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d'],
     }
 
     /**
@@ -101,9 +103,14 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             }`
             const response = await this.openPopup(loginUrl)
 
+            const {payload} = response
+
             return {
-                chain: Checksum256.from(response.chain),
-                permissionLevel: PermissionLevel.from(response.permissionLevel),
+                chain: Checksum256.from(payload.cid),
+                permissionLevel: PermissionLevel.from({
+                    actor: payload.sa,
+                    permission: payload.sp,
+                }),
             }
         } catch (error: unknown) {
             if (error instanceof Error) {
@@ -118,12 +125,14 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
      */
     async sign(
         resolved: ResolvedSigningRequest,
-        _context: TransactContext
+        context: TransactContext
     ): Promise<WalletPluginSignResponse> {
         try {
             const signUrl = `${this.webAuthenticatorUrl}/sign?esr=${encodeURIComponent(
                 resolved.request.encode()
-            )}`
+            )}&chain=${context.chain?.name}&accountName=${context.accountName}&permissionName=${
+                context.permissionName
+            }`
             const response = await this.openPopup(signUrl)
 
             return {
