@@ -1,0 +1,33 @@
+{
+    "request": {
+        "path": "https://jungle4.greymass.com/v1/chain/get_info",
+        "params": {
+            "method": "GET",
+            "headers": {}
+        }
+    },
+    "status": 200,
+    "json": {
+        "server_version": "09f89c3b",
+        "chain_id": "73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d",
+        "head_block_num": 178344901,
+        "last_irreversible_block_num": 178344899,
+        "last_irreversible_block_id": "0aa153c31be3b436d3324d6ff40fed4b7fcb5d5f0faaf466e24c91a9cd6731a0",
+        "head_block_id": "0aa153c50fd3f1e4fe62d688808db80058087d270ef36c87d99d5097008c7f9b",
+        "head_block_time": "2024-12-24T05:57:12.000",
+        "head_block_producer": "clevermonkey",
+        "virtual_block_cpu_limit": 200000000,
+        "virtual_block_net_limit": 1048576000,
+        "block_cpu_limit": 200000,
+        "block_net_limit": 1048576,
+        "server_version_string": "v1.0.0-rc2",
+        "fork_db_head_block_num": 178344901,
+        "fork_db_head_block_id": "0aa153c50fd3f1e4fe62d688808db80058087d270ef36c87d99d5097008c7f9b",
+        "server_full_version_string": "v1.0.0-rc2-09f89c3b146120733640eb299f139860df707a82",
+        "total_cpu_weight": "120569996644188",
+        "total_net_weight": "117539987778681",
+        "earliest_available_block_num": 178162388,
+        "last_irreversible_block_time": "2024-12-24T05:57:11.000"
+    },
+    "text": "{\"server_version\":\"09f89c3b\",\"chain_id\":\"73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d\",\"head_block_num\":178344901,\"last_irreversible_block_num\":178344899,\"last_irreversible_block_id\":\"0aa153c31be3b436d3324d6ff40fed4b7fcb5d5f0faaf466e24c91a9cd6731a0\",\"head_block_id\":\"0aa153c50fd3f1e4fe62d688808db80058087d270ef36c87d99d5097008c7f9b\",\"head_block_time\":\"2024-12-24T05:57:12.000\",\"head_block_producer\":\"clevermonkey\",\"virtual_block_cpu_limit\":200000000,\"virtual_block_net_limit\":1048576000,\"block_cpu_limit\":200000,\"block_net_limit\":1048576,\"server_version_string\":\"v1.0.0-rc2\",\"fork_db_head_block_num\":178344901,\"fork_db_head_block_id\":\"0aa153c50fd3f1e4fe62d688808db80058087d270ef36c87d99d5097008c7f9b\",\"server_full_version_string\":\"v1.0.0-rc2-09f89c3b146120733640eb299f139860df707a82\",\"total_cpu_weight\":\"120569996644188\",\"total_net_weight\":\"117539987778681\",\"earliest_available_block_num\":178162388,\"last_irreversible_block_time\":\"2024-12-24T05:57:11.000\"}"
+}
