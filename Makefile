@@ -44,11 +44,11 @@ publish-base: | distclean node_modules
 
 .PHONY: publish
 publish: publish-base
-	@yarn publish && git push && git push --tags
+	@yarn publish --access public && git push && git push --tags
 
 .PHONY: publish-next
 publish-next: publish-base
-	@yarn publish --tag next && git push && git push --tags
+	@yarn publish --tag next --access public && git push && git push --tags
 
 .PHONY: docs
 docs: build/docs

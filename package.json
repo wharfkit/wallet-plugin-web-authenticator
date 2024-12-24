@@ -1,7 +1,7 @@
 {
     "name": "@wharfkit/wallet-plugin-web-authenticator",
     "description": "A Web Authenticator wallet plugin for use with @wharfkit/session.",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "homepage": "https://github.com/wharfkit/wallet-plugin-web-authenticator",
     "license": "BSD-3-Clause",
     "main": "lib/wallet-plugin-web-authenticator.js",
@@ -16,8 +16,8 @@
         "prepare": "make"
     },
     "dependencies": {
-        "tslib": "^2.1.0",
-        "@wharfkit/protocol-esr": "^1.3.2"
+        "@wharfkit/protocol-esr": "^1.3.2",
+        "tslib": "^2.1.0"
     },
     "peerDependencies": {
         "@wharfkit/session": "^1.4.0"
