@@ -2,6 +2,7 @@ import {
     createIdentityRequest,
     extractSignaturesFromCallback,
     isCallback,
+    setTransactionCallback,
 } from '@wharfkit/protocol-esr'
 import {
     AbstractWalletPlugin,
@@ -132,8 +133,11 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
         context: TransactContext
     ): Promise<WalletPluginSignResponse> {
         try {
+            // Create a new signing request based on the existing resolved request
+            const modifiedRequest = await context.createRequest({transaction: resolved.transaction})
+            setTransactionCallback(modifiedRequest, '')
             const signUrl = `${this.webAuthenticatorUrl}/sign?esr=${encodeURIComponent(
-                resolved.request.encode()
+                modifiedRequest.encode()
             )}&chain=${context.chain?.name}&accountName=${context.accountName}&permissionName=${
                 context.permissionName
             }`
