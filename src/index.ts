@@ -63,7 +63,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     /**
      * Opens a popup window with the given URL and waits for it to complete
      */
-    private async openPopup(url: string): Promise<any> {
+    private async openPopup(url: string, type: 'sign' | 'identity' = 'sign'): Promise<any> {
         return new Promise((resolve, reject) => {
             const popup = window.open(url, 'Web Authenticator', 'width=400,height=600')
 
@@ -75,7 +75,11 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             const checkClosed = setInterval(() => {
                 if (popup.closed) {
                     clearInterval(checkClosed)
-                    reject(new Error('Authentication cancelled'))
+                    reject(
+                        new Error(
+                            type === 'sign' ? 'Transaction cancelled' : 'Authentication cancelled'
+                        )
+                    )
                 }
             }, 1000)
 
@@ -106,7 +110,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             const loginUrl = `${this.webAuthenticatorUrl}/sign?esr=${request.encode()}&chain=${
                 context.chain?.name
             }`
-            const response = await this.openPopup(loginUrl)
+            const response = await this.openPopup(loginUrl, 'identity')
 
             const {payload} = response
 
@@ -141,7 +145,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             )}&chain=${context.chain?.name}&accountName=${context.accountName}&permissionName=${
                 context.permissionName
             }`
-            const response = await this.openPopup(signUrl)
+            const response = await this.openPopup(signUrl, 'sign')
 
             const wasSuccessful =
                 isCallback(response.payload) &&
