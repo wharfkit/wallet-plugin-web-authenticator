@@ -138,7 +138,10 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     ): Promise<WalletPluginSignResponse> {
         try {
             // Create a new signing request based on the existing resolved request
-            const modifiedRequest = await context.createRequest({transaction: resolved.transaction})
+            const modifiedRequest = await context.createRequest({
+                transaction: resolved.transaction,
+            })
+            modifiedRequest.setBroadcast(false)
             setTransactionCallback(modifiedRequest, '')
             const signUrl = `${this.webAuthenticatorUrl}/sign?esr=${encodeURIComponent(
                 modifiedRequest.encode()
