@@ -10,7 +10,6 @@ import {
     LoginContext,
     PermissionLevel,
     ResolvedSigningRequest,
-    Signature,
     TransactContext,
     WalletPlugin,
     WalletPluginConfig,
@@ -147,7 +146,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 modifiedRequest.encode()
             )}&chain=${context.chain?.name}&accountName=${context.accountName}&permissionName=${
                 context.permissionName
-            }`
+            }&appName=${context.appName}`
             const response = await this.openPopup(signUrl, 'sign')
 
             const wasSuccessful =
