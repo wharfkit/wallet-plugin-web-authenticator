@@ -661,12 +661,24 @@
     pako "^2.0.4"
     tslib "^2.1.0"
 
-"@wharfkit/signing-request@^3.1.0":
-  version "3.1.0"
-  resolved "https://registry.yarnpkg.com/@wharfkit/signing-request/-/signing-request-3.1.0.tgz#7883f0b2350c6fe3446d2b8733dd7d0004f01911"
-  integrity sha512-aVWV9Z3o77uDrFSR3wC78c1e/QNkfi3IxZbGzMizvoYTYPKHgHs1F6Go/1oe0Dlo/kEB9tgckFviccUqrK987w==
+"@wharfkit/session@^1.5.0":
+  version "1.5.1"
+  resolved "https://registry.yarnpkg.com/@wharfkit/session/-/session-1.5.1.tgz#321142ad04e8f3c35b5aa2f31af409103a350f44"
+  integrity sha512-swNu0F3/GdBbr32RyRS9ZWQRcbxmC2QLmrRYRJFPqqsq87sLnJfIFYaI9RdHnD/g59+pFIunqrT/VDzM6ZynMg==
   dependencies:
-    "@wharfkit/antelope" "^1.0.0"
+    "@wharfkit/abicache" "^1.2.1"
+    "@wharfkit/antelope" "^1.0.11"
+    "@wharfkit/common" "^1.2.0"
+    "@wharfkit/signing-request" "^3.1.0"
+    pako "^2.0.4"
+    tslib "^2.1.0"
+
+"@wharfkit/signing-request@^3.1.0", "@wharfkit/signing-request@^3.2.0":
+  version "3.2.0"
+  resolved "https://registry.yarnpkg.com/@wharfkit/signing-request/-/signing-request-3.2.0.tgz#94cab97e27d1001973771056cfb9d54c02e45354"
+  integrity sha512-rIMzqwAKA5vb09+1BI+9fUXbj73JIkYcD1XT/Tom+k/+bqi51JcmC0trjCOjTUOK9UYDabpxYFixrf1ZvQymKw==
+  dependencies:
+    "@wharfkit/antelope" "^1.0.7"
     tslib "^2.0.3"
 
 "@wharfkit/token@^1.1.2":
