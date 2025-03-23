@@ -10,7 +10,6 @@ import {
     LoginContext,
     PermissionLevel,
     ResolvedSigningRequest,
-    Signature,
     TransactContext,
     WalletPlugin,
     WalletPluginConfig,
@@ -18,14 +17,34 @@ import {
     WalletPluginMetadata,
     WalletPluginSignResponse,
 } from '@wharfkit/session'
+import {Bytes, Checksum512, PrivateKey, PublicKey, Serializer, UInt64} from '@wharfkit/antelope'
+import {AES_CBC} from 'asmcrypto.js'
 
 interface WebAuthenticatorOptions {
     /** The URL of the web authenticator service */
     webAuthenticatorUrl?: string
 }
 
+/**
+ * Seal a message using AES and shared secret derived from given keys.
+ * @internal
+ */
+async function sealMessage(
+    message: string,
+    privateKey: PrivateKey,
+    publicKey: PublicKey,
+    nonce: UInt64
+): Promise<Bytes> {
+    const secret = privateKey.sharedSecret(publicKey)
+    const key = Checksum512.hash(Serializer.encode({object: nonce}).appending(secret.array))
+    const cbc = new AES_CBC(key.array.slice(0, 32), key.array.slice(32, 48))
+    const encrypted = await cbc.encrypt(Bytes.from(message, 'utf8').array)
+    return Bytes.from(encrypted)
+}
+
 export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implements WalletPlugin {
     private webAuthenticatorUrl: string
+    private authenticatorKey?: PublicKey
 
     constructor(options: WebAuthenticatorOptions = {}) {
         super()
@@ -105,14 +124,18 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
      */
     async login(context: LoginContext): Promise<WalletPluginLoginResponse> {
         try {
+            // Generate a new request key pair for this login attempt
+            this.data.requests.privateKey = PrivateKey.generate('K1')
+            const requestPublicKey = this.data.requests.privateKey.toPublic()
+
             // Create the identity request to be presented to the user
             const {request} = await createIdentityRequest(context, '')
             const loginUrl = `${this.webAuthenticatorUrl}/sign?esr=${request.encode()}&chain=${
                 context.chain?.name
-            }`
+            }&requestKey=${requestPublicKey.toString()}`
             const response = await this.openPopup(loginUrl, 'identity')
 
-            const {payload} = response
+            const {payload, requestKey: webAuthenticatorPublicKey} = response
 
             return {
                 chain: Checksum256.from(payload.cid),
@@ -120,6 +143,10 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                     actor: payload.sa,
                     permission: payload.sp,
                 }),
+                // We need to modify the session kit so session metadata can be added like this:
+                metadata: {
+                    requestKey: PublicKey.from(webAuthenticatorPublicKey),
+                },
             }
         } catch (error: unknown) {
             if (error instanceof Error) {
@@ -137,17 +164,39 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
         context: TransactContext
     ): Promise<WalletPluginSignResponse> {
         try {
+            // Ensure we have a request key from login
+            if (!this.data.requests.privateKey) {
+                throw new Error('No request key available - please login first')
+            }
+
+            // Get the authenticator's public key from the stored value
+            if (!this.authenticatorKey) {
+                throw new Error('No authenticator key available - please login first')
+            }
+
             // Create a new signing request based on the existing resolved request
             const modifiedRequest = await context.createRequest({
                 transaction: resolved.transaction,
             })
             modifiedRequest.setBroadcast(false)
             setTransactionCallback(modifiedRequest, '')
-            const signUrl = `${this.webAuthenticatorUrl}/sign?esr=${encodeURIComponent(
-                modifiedRequest.encode()
-            )}&chain=${context.chain?.name}&accountName=${context.accountName}&permissionName=${
-                context.permissionName
-            }`
+
+            // Seal the request using the shared secret
+            const nonce = UInt64.from(Date.now())
+            const sealedRequest = await sealMessage(
+                modifiedRequest.encode(),
+                this.data.requests.privateKey,
+                // We need to also modify the transact context so that the metadata values from the session are available here:
+                context.metadata.requestKey,
+                nonce
+            )
+
+            const signUrl = `${this.webAuthenticatorUrl}/sign?sealed=${sealedRequest.toString(
+                'hex'
+            )}&nonce=${nonce.toString()}&chain=${context.chain?.name}&accountName=${
+                context.accountName
+            }&permissionName=${context.permissionName}&appName=${context.appName}`
+
             const response = await this.openPopup(signUrl, 'sign')
 
             const wasSuccessful =
