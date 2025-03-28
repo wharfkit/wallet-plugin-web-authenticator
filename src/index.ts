@@ -122,9 +122,8 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             const response = await this.openPopup(loginUrl, 'identity')
 
             const {payload} = response
-            const {requestKey: webAuthenticatorPublicKey} = payload
 
-            this.data.publicKey = PublicKey.from(webAuthenticatorPublicKey)
+            this.data.publicKey = payload.link_key
 
             return {
                 chain: Checksum256.from(payload.cid),
@@ -171,7 +170,9 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 'hex'
             )}&nonce=${nonce.toString()}&chain=${context.chain?.name}&accountName=${
                 context.accountName
-            }&permissionName=${context.permissionName}&appName=${context.appName}`
+            }&permissionName=${context.permissionName}&appName=${
+                context.appName
+            }&requestKey=${String(PrivateKey.from(this.data.privateKey).toPublic())}`
 
             const response = await this.openPopup(signUrl, 'sign')
 
