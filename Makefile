@@ -47,7 +47,8 @@ publish: publish-base
 	@yarn publish --access public && git push && git push --tags
 
 .PHONY: publish-next
-publish-next: publish-base
+publish-next: | distclean node_modules
+	@yarn config set version-tag-prefix "next" && yarn config set version-git-message "Next version %s"
 	@yarn publish --tag next --access public && git push && git push --tags
 
 .PHONY: docs
