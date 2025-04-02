@@ -17,7 +17,7 @@ import {
     WalletPluginMetadata,
     WalletPluginSignResponse,
 } from '@wharfkit/session'
-import {PrivateKey, PublicKey, UInt64, Signature} from '@wharfkit/antelope'
+import {PrivateKey, PublicKey, UInt64} from '@wharfkit/antelope'
 import {sealMessage} from './utils'
 
 interface WebAuthenticatorOptions {
