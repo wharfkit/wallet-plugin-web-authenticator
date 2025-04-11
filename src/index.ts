@@ -27,7 +27,6 @@ interface WebAuthenticatorOptions {
 
 export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implements WalletPlugin {
     private webAuthenticatorUrl: string
-    private authenticatorKey?: PublicKey
 
     constructor(options: WebAuthenticatorOptions = {}) {
         super()
