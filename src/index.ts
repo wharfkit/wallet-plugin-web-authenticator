@@ -156,7 +156,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             setTransactionCallback(resolved.request, '')
 
             // Seal the request using the shared secret
-            const nonce = UInt64.from(Date.now())
+            const nonce = UInt64.from(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER))
 
             const sealedRequest = await sealMessage(
                 resolved.request.encode(),
