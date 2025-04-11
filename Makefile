@@ -2,7 +2,7 @@ SHELL := /bin/bash
 SRC_FILES := $(shell find src -name '*.ts')
 TEST_FILES := $(shell find test/tests -name '*.ts')
 BIN := ./node_modules/.bin
-MOCHA_OPTS := -u tdd -r ts-node/register -r tsconfig-paths/register --extension ts
+MOCHA_OPTS := -u tdd -r ts-node/register -r tsconfig-paths/register -r test/setup.ts --extension ts
 NYC_OPTS := --temp-dir build/nyc_output --report-dir build/coverage
 
 lib: ${SRC_FILES} package.json tsconfig.json node_modules rollup.config.js
@@ -47,7 +47,8 @@ publish: publish-base
 	@yarn publish --access public && git push && git push --tags
 
 .PHONY: publish-next
-publish-next: publish-base
+publish-next: | distclean node_modules
+	@yarn config set version-tag-prefix "next" && yarn config set version-git-message "Next version %s"
 	@yarn publish --tag next --access public && git push && git push --tags
 
 .PHONY: docs

@@ -1,7 +1,7 @@
 {
     "name": "@wharfkit/wallet-plugin-web-authenticator",
     "description": "A Web Authenticator wallet plugin for use with @wharfkit/session.",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "homepage": "https://github.com/wharfkit/wallet-plugin-web-authenticator",
     "license": "BSD-3-Clause",
     "main": "lib/wallet-plugin-web-authenticator.js",
@@ -17,6 +17,7 @@
     },
     "dependencies": {
         "@wharfkit/protocol-esr": "^1.3.2",
+        "asmcrypto.js": "^2.3.2",
         "tslib": "^2.1.0"
     },
     "resolutions": {
@@ -24,7 +25,7 @@
         "@wharfkit/signing-request": "^3.2.0"
     },
     "peerDependencies": {
-        "@wharfkit/session": "^1.5.0"
+        "@wharfkit/session": "next"
     },
     "devDependencies": {
         "@rollup/plugin-alias": "^3.1.4",
@@ -35,17 +36,19 @@
         "@rollup/plugin-typescript": "^10.0.1",
         "@rollup/plugin-virtual": "^2.0.3",
         "@types/chai": "^4.3.1",
+        "@types/jsdom": "^21.1.7",
         "@types/mocha": "^9.0.0",
         "@types/node": "^18.7.18",
         "@typescript-eslint/eslint-plugin": "^5.20.0",
         "@typescript-eslint/parser": "^5.20.0",
         "@wharfkit/mock-data": "^1.3.0",
-        "@wharfkit/session": "^1.5.0",
+        "@wharfkit/session": "next",
         "chai": "^4.3.4",
         "eslint": "^8.13.0",
         "eslint-config-prettier": "^8.1.0",
         "eslint-plugin-prettier": "^4.0.0",
         "gh-pages": "^4.0.0",
+        "jsdom": "^26.0.0",
         "mocha": "^10.0.0",
         "node-fetch": "^2.6.1",
         "nyc": "^15.1.0",
@@ -53,6 +56,7 @@
         "rollup": "^2.70.2",
         "rollup-plugin-dts": "^4.2.1",
         "rollup-plugin-terser": "^7.0.2",
+        "text-encoding": "^0.7.0",
         "ts-node": "^10.9.1",
         "tsconfig-paths": "^4.1.1",
         "typedoc": "^0.23.14",
