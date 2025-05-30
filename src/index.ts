@@ -27,6 +27,7 @@ interface WebAuthenticatorOptions {
 
 export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implements WalletPlugin {
     private webAuthenticatorUrl: string
+    private currentLoginPromise: Promise<WalletPluginLoginResponse> | null = null
 
     constructor(options: WebAuthenticatorOptions = {}) {
         super()
@@ -105,6 +106,24 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
      * Performs login by opening the web authenticator in a popup
      */
     async login(context: LoginContext): Promise<WalletPluginLoginResponse> {
+        // If a login is already in progress, return the same promise
+        if (this.currentLoginPromise) {
+            return this.currentLoginPromise
+        }
+
+        // Start a new login process
+        this.currentLoginPromise = this.loginInternal(context)
+
+        try {
+            const result = await this.currentLoginPromise
+            return result
+        } finally {
+            // Clean up the promise reference when done
+            this.currentLoginPromise = null
+        }
+    }
+
+    private async loginInternal(context: LoginContext): Promise<WalletPluginLoginResponse> {
         try {
             // Generate a new request key pair for this login attempt
             this.data.privateKey = PrivateKey.generate('K1')
