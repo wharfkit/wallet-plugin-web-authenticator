@@ -152,7 +152,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 }),
             }
         } catch (error: unknown) {
-            console.error('[WebAuthenticator] Login failed:', error)
             if (error instanceof Error) {
                 throw new Error(`Login failed: ${error.message}`)
             }
@@ -172,8 +171,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             if (!this.data.privateKey || !this.data.publicKey) {
                 throw new Error('No request keys available - please login first')
             }
-
-            const currentRequestPublicKey = PrivateKey.from(this.data.privateKey).toPublic()
 
             resolved.request.setBroadcast(false)
             setTransactionCallback(resolved.request, '')
@@ -220,7 +217,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 throw new Error('Signing failed: No signatures returned')
             }
         } catch (error: unknown) {
-            console.error('[WebAuthenticator] Sign failed:', error)
             if (error instanceof Error) {
                 throw new Error(`Signing failed: ${error.message}`)
             }
