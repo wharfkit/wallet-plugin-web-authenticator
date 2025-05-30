@@ -108,11 +108,9 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     async login(context: LoginContext): Promise<WalletPluginLoginResponse> {
         // If a login is already in progress, return the same promise
         if (this.currentLoginPromise) {
-            console.log('[WebAuthenticator] Login already in progress, returning existing promise')
             return this.currentLoginPromise
         }
 
-        console.log('[WebAuthenticator] Starting new login process')
         // Start a new login process
         this.currentLoginPromise = this.loginInternal(context)
 
@@ -121,7 +119,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             return result
         } finally {
             // Clean up the promise reference when done
-            console.log('[WebAuthenticator] Login process completed, cleaning up promise')
             this.currentLoginPromise = null
         }
     }
@@ -132,9 +129,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             this.data.privateKey = PrivateKey.generate('K1')
             const requestPublicKey = this.data.privateKey.toPublic()
 
-            console.log('[WebAuthenticator] Generated new private key for login')
-            console.log('[WebAuthenticator] Request public key:', requestPublicKey.toString())
-
             context.appName = context.appName || 'Unknown App'
 
             // Create the identity request to be presented to the user
@@ -144,20 +138,11 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 context.chain?.name
             }&requestKey=${requestPublicKey.toString()}`
 
-            console.log(
-                '[WebAuthenticator] Opening popup with requestKey:',
-                requestPublicKey.toString()
-            )
             const response = await this.openPopup(loginUrl, 'identity')
 
             const {payload} = response
 
             this.data.publicKey = payload.link_key
-            console.log(
-                '[WebAuthenticator] Received link_key from web authenticator:',
-                payload.link_key
-            )
-            console.log('[WebAuthenticator] Login successful for account:', payload.sa)
 
             return {
                 chain: Checksum256.from(payload.cid),
@@ -189,15 +174,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             }
 
             const currentRequestPublicKey = PrivateKey.from(this.data.privateKey).toPublic()
-            console.log('[WebAuthenticator] Starting sign process')
-            console.log(
-                '[WebAuthenticator] Current public key (link_key):',
-                this.data.publicKey.toString()
-            )
-            console.log(
-                '[WebAuthenticator] Derived request public key:',
-                currentRequestPublicKey.toString()
-            )
 
             resolved.request.setBroadcast(false)
             setTransactionCallback(resolved.request, '')
@@ -213,10 +189,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             )
 
             const requestKeyForUrl = String(PrivateKey.from(this.data.privateKey).toPublic())
-            console.log(
-                '[WebAuthenticator] Request key being sent to web authenticator:',
-                requestKeyForUrl
-            )
 
             const signUrl = `${this.webAuthenticatorUrl}/sign?sealed=${sealedRequest.toString(
                 'hex'
@@ -233,7 +205,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 extractSignaturesFromCallback(response.payload).length > 0
 
             if (wasSuccessful) {
-                console.log('[WebAuthenticator] Sign successful')
                 // If the callback was resolved, create a new request from the response
                 const resolvedRequest = await ResolvedSigningRequest.fromPayload(
                     response.payload,
