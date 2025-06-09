@@ -6,6 +6,7 @@ import {
 } from '@wharfkit/protocol-esr'
 import {
     AbstractWalletPlugin,
+    CallbackPayload,
     Checksum256,
     LoginContext,
     PermissionLevel,
@@ -118,19 +119,37 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             const loginUrl = `${this.webAuthenticatorUrl}/sign?esr=${request.encode()}&chain=${
                 context.chain?.name
             }&requestKey=${requestPublicKey.toString()}`
-            const response = await this.openPopup(loginUrl, 'identity')
 
-            const {payload} = response
+            const {payload}: {payload: CallbackPayload} = await this.openPopup(loginUrl, 'identity')
 
             this.data.publicKey = payload.link_key
 
-            return {
+            if (!payload.cid) {
+                throw new Error('Login failed: No chain ID returned')
+            }
+
+            // Prepare the basic login response
+            const loginResponse: WalletPluginLoginResponse = {
                 chain: Checksum256.from(payload.cid),
                 permissionLevel: PermissionLevel.from({
                     actor: payload.sa,
                     permission: payload.sp,
                 }),
             }
+
+            // Store the identity request and signature for verification
+            // The 3rd party app can use this to verify the authentication
+            if (payload.sig0) {
+                // Create identity proof object for third-party verification
+                Object.assign(loginResponse, {
+                    identityProof: {
+                        signature: payload.sig0,
+                        signedRequest: request.encode(),
+                    },
+                })
+            }
+
+            return loginResponse
         } catch (error: unknown) {
             if (error instanceof Error) {
                 throw new Error(`Login failed: ${error.message}`)
