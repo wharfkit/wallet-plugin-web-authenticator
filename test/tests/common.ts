@@ -175,6 +175,8 @@ suite('wallet plugin', function () {
                                 sp: 'test',
                                 requestKey:
                                     'PUB_K1_6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5BoDq63',
+                                // Include identity signature for verification using ESR standard field name
+                                sig: 'SIG_K1_KBub1qmdiPpWA2XKKEZEG3PLZPMP3FnYJuH4gYrKzAQKdxYnJjFMpVWdxEwmFFodgGaNnAMbR4kaFkuXBtJnZLCYWWJdqp',
                             },
                         },
                     })
@@ -189,6 +191,21 @@ suite('wallet plugin', function () {
         assert.equal(loginResponse.chain.toString(), chainId)
         assert.equal(loginResponse.permissionLevel.actor.toString(), 'wharfkit1131')
         assert.equal(loginResponse.permissionLevel.permission.toString(), 'test')
+
+        // Verify identity proof is included for third-party verification
+        assert.exists((loginResponse as any).identityProof, 'Identity proof should be included')
+        assert.exists(
+            (loginResponse as any).identityProof.signature,
+            'Identity proof signature should be included'
+        )
+        assert.exists(
+            (loginResponse as any).identityProof.signedRequest,
+            'Identity proof signed request should be included'
+        )
+        assert.equal(
+            (loginResponse as any).identityProof.signature,
+            'SIG_K1_KBub1qmdiPpWA2XKKEZEG3PLZPMP3FnYJuH4gYrKzAQKdxYnJjFMpVWdxEwmFFodgGaNnAMbR4kaFkuXBtJnZLCYWWJdqp'
+        )
     })
 
     test('sign functionality', async function () {
