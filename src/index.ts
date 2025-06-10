@@ -139,11 +139,11 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
 
             // Store the identity request and signature for verification
             // The 3rd party app can use this to verify the authentication
-            if (payload.sig0) {
+            if (payload.sig) {
                 // Create identity proof object for third-party verification
                 Object.assign(loginResponse, {
                     identityProof: {
-                        signature: payload.sig0,
+                        signature: payload.sig,
                         signedRequest: request.encode(),
                     },
                 })

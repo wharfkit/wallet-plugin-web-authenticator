@@ -68,7 +68,7 @@ For login:
         cid: string // Chain ID
         sa: string // Signing account
         sp: string // Signing permission
-        sig0?: string // Optional: Signature proving ownership of the account for third-party verification
+        sig?: string // Optional: Signature proving ownership of the account for third-party verification
     }
 }
 ```
@@ -83,7 +83,7 @@ For signing:
 
 ### Identity Proof
 
-When logging in, the web authenticator can optionally provide a `sig0` field in the response payload following the EOSIO Signing Request (ESR) standard. This signature proves ownership of the account and allows third-party applications to verify the authenticity of the login.
+When logging in, the web authenticator can optionally provide a `sig` field in the response payload following the EOSIO Signing Request (ESR) standard. This signature proves ownership of the account and allows third-party applications to verify the authenticity of the login.
 
 If provided, the wallet plugin will include an `identityProof` object in the login response:
 
