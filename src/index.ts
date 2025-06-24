@@ -41,8 +41,11 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
         requiresChainSelect: false,
         // Allow permission selection
         requiresPermissionSelect: false,
-        // Currently only supports Jungle 4:
-        supportedChains: ['73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d'],
+        // Currently only supports Jungle 4 and Vaulta:
+        supportedChains: [
+            '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d',
+            'aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906',
+        ],
     }
 
     /**
