@@ -23,7 +23,7 @@ suite('utils', function () {
         const message = 'Hello, World!'
 
         const sealedMessage = await sealMessage(message, privateKey, publicKey, nonce)
-        const unsealedMessage = unsealMessage(sealedMessage, privateKey, publicKey, nonce)
+        const unsealedMessage = await unsealMessage(sealedMessage, privateKey, publicKey, nonce)
         assert.equal(unsealedMessage, message)
     })
 })
