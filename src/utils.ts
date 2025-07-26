@@ -1,5 +1,4 @@
 import {Bytes, Checksum512, PrivateKey, PublicKey, Serializer, UInt64} from '@wharfkit/antelope'
-import {AES_CBC} from 'asmcrypto.js'
 
 /**
  * Seals a message using AES encryption and a shared secret derived from given keys.
@@ -17,9 +16,19 @@ export async function sealMessage(
 ): Promise<Bytes> {
     const secret = privateKey.sharedSecret(publicKey)
     const key = Checksum512.hash(Serializer.encode({object: nonce}).appending(secret.array))
-    const cbc = new AES_CBC(key.array.slice(0, 32), key.array.slice(32, 48))
-    const encrypted = await cbc.encrypt(Bytes.from(message, 'utf8').array)
-    return Bytes.from(encrypted)
+    const symmetricKey = await crypto.subtle.importKey(
+        'raw',
+        key.array.slice(0, 32),
+        {name: 'AES-CBC'},
+        false,
+        ['encrypt', 'decrypt']
+    )
+    const encryptedMessage = await crypto.subtle.encrypt(
+        {name: 'AES-CBC', iv: key.array.slice(32, 48)},
+        symmetricKey,
+        Bytes.from(message, 'utf8').array
+    )
+    return Bytes.from(encryptedMessage)
 }
 
 /**
@@ -31,15 +40,25 @@ export async function sealMessage(
  * @returns The decrypted message as a UTF-8 string
  * @internal
  */
-export function unsealMessage(
+export async function unsealMessage(
     message: Bytes,
     privateKey: PrivateKey,
     publicKey: PublicKey,
     nonce: UInt64
-): string {
+): Promise<string> {
     const secret = privateKey.sharedSecret(publicKey)
     const key = Checksum512.hash(Serializer.encode({object: nonce}).appending(secret.array))
-    const cbc = new AES_CBC(key.array.slice(0, 32), key.array.slice(32, 48))
-    const ciphertext = Bytes.from(cbc.decrypt(message.array))
-    return ciphertext.toString('utf8')
+    const symmetricKey = await crypto.subtle.importKey(
+        'raw',
+        key.array.slice(0, 32),
+        {name: 'AES-CBC'},
+        false,
+        ['encrypt', 'decrypt']
+    )
+    const decryptedMessage = await crypto.subtle.decrypt(
+        {name: 'AES-CBC', iv: key.array.slice(32, 48)},
+        symmetricKey,
+        message.array
+    )
+    return Bytes.from(decryptedMessage).toString('utf8')
 }
