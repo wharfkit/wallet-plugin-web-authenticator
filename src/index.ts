@@ -116,7 +116,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             const {request} = await createIdentityRequest(context, '')
 
             const loginUrl = `${this.webAuthenticatorUrl}/sign?esr=${request.encode()}&chain=${
-                context.chain?.name
+                context.chain?.id
             }&requestKey=${requestPublicKey.toString()}`
             const response = await this.openPopup(loginUrl, 'identity')
 
