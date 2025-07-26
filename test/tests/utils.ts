@@ -1,6 +1,6 @@
 import {assert} from 'chai'
 import {PrivateKey, UInt64} from '@wharfkit/antelope'
-import {sealMessage, unsealMessage} from '../../src/utils'
+import {sealMessage, unsealMessage} from '@wharfkit/sealed-messages'
 
 suite('utils', function () {
     test('sealMessage', async function () {
