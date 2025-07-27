@@ -19,7 +19,7 @@ import {
     WalletPluginSignResponse,
 } from '@wharfkit/session'
 import {PrivateKey, PublicKey, UInt64} from '@wharfkit/antelope'
-import {sealMessage} from './utils'
+import {sealMessage} from '@wharfkit/sealed-messages'
 
 interface WebAuthenticatorOptions {
     /** The URL of the web authenticator service */
