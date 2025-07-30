@@ -118,6 +118,22 @@ You need [Make](https://www.gnu.org/software/make/), [node.js](https://nodejs.or
 
 See the [Makefile](./Makefile) for other useful targets. Before submitting a pull request make sure to run `make lint`.
 
+## User Interface Integration
+
+The plugin integrates with the Wharf SessionKit UI system to provide user feedback:
+
+-   **Status Messages**: When a popup is opened, the plugin displays a status message informing the user to complete the action in the popup window
+-   **Retry Mechanism**: If popup windows fail to open, the plugin provides an "Open Wallet" button for users to retry
+-   **UI Context**: The plugin uses the UI context from the SessionKit to display appropriate messages and handle user interactions
+
+### Retry Functionality
+
+When popup windows fail to open (due to browser blocking or other issues), the plugin:
+
+1. Shows a status message directing the user to click the "Open Wallet" button
+2. Provides a retry function that can be called by the UI
+3. Allows users to manually trigger another popup attempt without showing error messages
+
 ## Security Considerations
 
 -   The plugin verifies the origin of messages from the popup window against the configured authenticator URL

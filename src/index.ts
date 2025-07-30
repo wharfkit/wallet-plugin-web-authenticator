@@ -68,23 +68,43 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     /**
      * Opens a popup window with the given URL and waits for it to complete
      */
-    private async openPopup(url: string, type: 'sign' | 'identity' = 'sign'): Promise<any> {
+    private async openPopup(
+        url: string,
+        type: 'sign' | 'identity' = 'sign',
+        context?: LoginContext | TransactContext
+    ): Promise<any> {
         return new Promise((resolve, reject) => {
             const popup = window.open(url, 'Web Authenticator', 'width=400,height=600')
 
             if (!popup) {
-                reject(new Error('Popup blocked - please enable popups for this site'))
+                // Popup failed to open - provide retry option
+                if (context?.ui) {
+                    // Store the retry function in the context so UI can call it
+                    ;(context as any).retryPopup = () => {
+                        return this.openPopup(url, type, context)
+                    }
+
+                    // Show status message indicating user should click the button
+                    const actionType = type === 'sign' ? 'transaction signing' : 'authentication'
+                    context.ui.status(`Click the "Open Wallet" button to complete ${actionType}`)
+                }
+
+                reject(new Error('Popup failed to open'))
                 return
+            }
+
+            // Show status message when popup is opened
+            if (context?.ui) {
+                const actionType = type === 'sign' ? 'transaction signing' : 'authentication'
+                context.ui.status(`Please complete ${actionType} in the popup window`)
             }
 
             const checkClosed = setInterval(() => {
                 if (popup.closed) {
                     clearInterval(checkClosed)
-                    reject(
-                        new Error(
-                            type === 'sign' ? 'Transaction cancelled' : 'Authentication cancelled'
-                        )
-                    )
+                    const cancelMessage =
+                        type === 'sign' ? 'Transaction cancelled' : 'Authentication cancelled'
+                    reject(new Error(cancelMessage))
                 }
             }, 1000)
 
@@ -123,7 +143,11 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 context.chain?.id
             }&requestKey=${requestPublicKey.toString()}`
 
-            const {payload}: {payload: CallbackPayload} = await this.openPopup(loginUrl, 'identity')
+            const {payload}: {payload: CallbackPayload} = await this.openPopup(
+                loginUrl,
+                'identity',
+                context
+            )
 
             this.data.publicKey = payload.link_key
 
@@ -155,6 +179,11 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             return loginResponse
         } catch (error: unknown) {
             if (error instanceof Error) {
+                // Check if this is a popup failed to open error
+                if (error.message.includes('Popup failed to open')) {
+                    // The UI has already been notified in openPopup
+                    throw error
+                }
                 throw new Error(`Login failed: ${error.message}`)
             }
             throw new Error('Login failed: Unknown error')
@@ -195,7 +224,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 context.appName
             }&requestKey=${String(PrivateKey.from(this.data.privateKey).toPublic())}`
 
-            const response = await this.openPopup(signUrl, 'sign')
+            const response = await this.openPopup(signUrl, 'sign', context)
 
             const wasSuccessful =
                 isCallback(response.payload) &&
@@ -218,6 +247,11 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             }
         } catch (error: unknown) {
             if (error instanceof Error) {
+                // Check if this is a popup failed to open error
+                if (error.message.includes('Popup failed to open')) {
+                    // The UI has already been notified in openPopup
+                    throw error
+                }
                 throw new Error(`Signing failed: ${error.message}`)
             }
             throw new Error('Signing failed: Unknown error')

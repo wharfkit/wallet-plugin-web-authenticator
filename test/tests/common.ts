@@ -266,4 +266,103 @@ suite('wallet plugin', function () {
         assert.instanceOf(signResponse.signatures[0], Signature)
         assert.exists(signResponse.resolved)
     })
+
+    test('popup retry functionality', async function () {
+        const plugin = new WalletPluginWebAuthenticator({
+            webAuthenticatorUrl: 'https://web-authenticator.greymass.com',
+        })
+
+        // Mock login context with UI
+        const loginContext = {
+            chain,
+            chains: [chain],
+            fetch: global.fetch,
+            hooks: {},
+            permissionLevel: PermissionLevel.from('wharfkit1131@test'),
+            ui: mockUI,
+            walletPlugins: [],
+            arbitrary: {},
+            uiRequirements: {},
+            addHook: () => {},
+            getClient: () => new APIClient({url: chain.url}),
+            esrOptions: {},
+        } as unknown as LoginContext
+
+        // Mock window.open to return null (simulating popup failed to open)
+        const originalOpen = window.open
+        window.open = () => null
+
+        try {
+            // Attempt login - should fail due to popup failed to open
+            await plugin.login(loginContext)
+            assert.fail('Login should have failed due to popup failed to open')
+        } catch (error: unknown) {
+            assert.instanceOf(error, Error)
+            if (error instanceof Error) {
+                assert.include(error.message, 'Popup failed to open')
+            }
+
+            // Verify that retry function is available
+            assert.exists((loginContext as any).retryPopup)
+            assert.isFunction((loginContext as any).retryPopup)
+        } finally {
+            // Restore original window.open
+            window.open = originalOpen
+        }
+    })
+
+    test('popup success with UI feedback', async function () {
+        const plugin = new WalletPluginWebAuthenticator({
+            webAuthenticatorUrl: 'https://web-authenticator.greymass.com',
+        })
+
+        // Mock login context with UI
+        const loginContext = {
+            chain,
+            chains: [chain],
+            fetch: global.fetch,
+            hooks: {},
+            permissionLevel: PermissionLevel.from('wharfkit1131@test'),
+            ui: mockUI,
+            walletPlugins: [],
+            arbitrary: {},
+            uiRequirements: {},
+            addHook: () => {},
+            getClient: () => new APIClient({url: chain.url}),
+            esrOptions: {},
+        } as unknown as LoginContext
+
+        // Start the login process
+        const loginPromise = plugin.login(loginContext)
+
+        // Simulate the popup response
+        setTimeout(() => {
+            if (messageHandler) {
+                messageHandler(
+                    new MessageEvent('message', {
+                        origin: 'https://web-authenticator.greymass.com',
+                        data: {
+                            type: 'identity',
+                            payload: {
+                                cid: chainId,
+                                sa: 'wharfkit1131',
+                                sp: 'test',
+                                requestKey:
+                                    'PUB_K1_6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5BoDq63',
+                                sig: 'SIG_K1_KBub1qmdiPpWA2XKKEZEG3PLZPMP3FnYJuH4gYrKzAQKdxYnJjFMpVWdxEwmFFodgGaNnAMbR4kaFkuXBtJnZLCYWWJdqp',
+                            },
+                        },
+                    })
+                )
+            }
+        }, 100)
+
+        // Test login functionality
+        const loginResponse = await loginPromise
+
+        // Verify login response
+        assert.equal(loginResponse.chain.toString(), chainId)
+        assert.equal(loginResponse.permissionLevel.actor.toString(), 'wharfkit1131')
+        assert.equal(loginResponse.permissionLevel.permission.toString(), 'test')
+    })
 })
