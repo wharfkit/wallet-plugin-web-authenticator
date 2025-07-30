@@ -202,10 +202,7 @@ suite('wallet plugin', function () {
             (loginResponse as any).identityProof.signedRequest,
             'Identity proof signed request should be included'
         )
-        assert.equal(
-            (loginResponse as any).identityProof.signature,
-            'SIG_K1_KBub1qmdiPpWA2XKKEZEG3PLZPMP3FnYJuH4gYrKzAQKdxYnJjFMpVWdxEwmFFodgGaNnAMbR4kaFkuXBtJnZLCYWWJdqp'
-        )
+        assert.equal((loginResponse as any).identityProof.signature, String(mockSignature))
     })
 
     test('sign functionality', async function () {
@@ -232,31 +229,6 @@ suite('wallet plugin', function () {
                 },
             },
         } as TransactContext)
-
-        // Simulate the popup response
-        setTimeout(() => {
-            if (messageHandler) {
-                messageHandler(
-                    new MessageEvent('message', {
-                        origin: 'https://web-authenticator.greymass.com',
-                        data: {
-                            payload: {
-                                tx: '01234567890123456789', // Mock transaction ID
-                                sig: String(mockSignature),
-                                sig0: String(mockSignature),
-                                sa: 'test', // Signer authority
-                                sp: 'active', // Signer permission
-                                rbn: '1234', // Reference block num
-                                rid: '5678', // Reference block ID
-                                ex: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // Expiration
-                                req: mockResolvedSigningRequest.request.encode(), // Original request
-                                cid: String(Chains.Jungle4.id), // Chain ID
-                            },
-                        },
-                    })
-                )
-            }
-        }, 0)
 
         // Test sign functionality
         const signResponse = await signPromise
@@ -334,28 +306,6 @@ suite('wallet plugin', function () {
 
         // Start the login process
         const loginPromise = plugin.login(loginContext)
-
-        // Simulate the popup response
-        setTimeout(() => {
-            if (messageHandler) {
-                messageHandler(
-                    new MessageEvent('message', {
-                        origin: 'https://web-authenticator.greymass.com',
-                        data: {
-                            type: 'identity',
-                            payload: {
-                                cid: chainId,
-                                sa: 'wharfkit1131',
-                                sp: 'test',
-                                requestKey:
-                                    'PUB_K1_6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5BoDq63',
-                                sig: 'SIG_K1_KBub1qmdiPpWA2XKKEZEG3PLZPMP3FnYJuH4gYrKzAQKdxYnJjFMpVWdxEwmFFodgGaNnAMbR4kaFkuXBtJnZLCYWWJdqp',
-                            },
-                        },
-                    })
-                )
-            }
-        }, 100)
 
         // Test login functionality
         const loginResponse = await loginPromise

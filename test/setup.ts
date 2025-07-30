@@ -1,5 +1,6 @@
 import {JSDOM} from 'jsdom'
 import {TextDecoder, TextEncoder} from 'text-encoding'
+import {mockSignature} from './tests/mocks'
 
 const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
     url: 'http://localhost',
@@ -10,6 +11,75 @@ const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
 const window = dom.window as any
 global.window = window
 global.document = window.document
+
+// Mock buoy library
+const mockBuoyResponses = new Map<string, any>()
+
+// Mock the buoy send function
+const mockSend = async (message: any, options: any) => {
+    // Store the message for the corresponding channel
+    if (options.channel) {
+        mockBuoyResponses.set(options.channel, message)
+    }
+    return 'delivered'
+}
+
+// Mock the buoy receive function
+const mockReceive = async (options: any) => {
+    const channel = options.channel
+
+    // Wait a bit to simulate network delay
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // Check if we have a stored response for this channel
+    if (mockBuoyResponses.has(channel)) {
+        const response = mockBuoyResponses.get(channel)
+        mockBuoyResponses.delete(channel)
+        return response
+    }
+
+    // Default response based on channel content
+    if (channel.includes('wharf-web-auth')) {
+        // Extract the request type from the channel ID
+        const channelParts = channel.split('-')
+        const requestType = channelParts[3] // wharf-web-auth-{type}-timestamp-random
+
+        const isLoginRequest = requestType === 'identity'
+
+        if (isLoginRequest) {
+            // Login response
+            return {
+                type: 'wharf:login:response',
+                payload: {
+                    cid: '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d',
+                    sa: 'wharfkit1131',
+                    sp: 'test',
+                    link_key: 'PUB_K1_6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5BoDq63',
+                    sig: String(mockSignature),
+                },
+            }
+        } else {
+            // Sign response - this should match the format expected by isCallback and extractSignaturesFromCallback
+            return {
+                payload: {
+                    // Use the format that was working in the original test
+                    tx: '01234567890123456789',
+                    sig: String(mockSignature),
+                    sig0: String(mockSignature),
+                    sa: 'test',
+                    sp: 'active',
+                    rbn: '1234',
+                    rid: '5678',
+                    ex: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                    req: 'mock-request-encoded',
+                    cid: '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d',
+                },
+            }
+        }
+    }
+
+    throw new Error('No response available for channel: ' + channel)
+}
 
 // Mock window.open
 window.open = function (url, name, features) {
@@ -26,71 +96,20 @@ window.open = function (url, name, features) {
             href: url,
             search: url && url.includes('?') ? url.split('?')[1] : '',
         },
-        postMessage: function (message: any) {
-            if (
-                message &&
-                (message.type === 'wharf:login:response' ||
-                    message.type === 'wharf:transact:response')
-            ) {
-                // Simulate successful callback from web authenticator
-                const callbackEvent = new window.CustomEvent('message', {
-                    data: {
-                        ...message,
-                        payload: {
-                            ...message.payload,
-                            signatures: [
-                                'SIG_K1_KBub1qmdiPpWA2XKKEZEG3PLZPMP3FnYJuH4gYrKzAQKdxYnJjFMpVWdxEwmFFodgGaNnAMbR4kaFkuXBtJnZLCYWWJdqp',
-                            ],
-                        },
-                    },
-                })
-
-                // This is mocked to allow the event to be processed
-                setTimeout(() => {
-                    window.dispatchEvent(callbackEvent)
-                    mockPopup.close()
-                }, 50)
-            }
-        },
     }
 
-    // Simulate response for login and sign requests
+    // Simulate popup closing after a delay
     setTimeout(() => {
-        if (url.includes('web-authenticator')) {
-            // Detect if it's a login or sign request
-            const isLoginRequest = url.includes('login') || !url.includes('sign')
-
-            const responseType = isLoginRequest ? 'wharf:login:response' : 'wharf:transact:response'
-
-            // Create payload based on request type
-            const payload = isLoginRequest
-                ? {
-                      chain: '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d',
-                      permissionLevel: 'wharfkit1131@test',
-                      signatures: [
-                          'SIG_K1_KBub1qmdiPpWA2XKKEZEG3PLZPMP3FnYJuH4gYrKzAQKdxYnJjFMpVWdxEwmFFodgGaNnAMbR4kaFkuXBtJnZLCYWWJdqp',
-                      ],
-                  }
-                : {
-                      signatures: [
-                          'SIG_K1_KBub1qmdiPpWA2XKKEZEG3PLZPMP3FnYJuH4gYrKzAQKdxYnJjFMpVWdxEwmFFodgGaNnAMbR4kaFkuXBtJnZLCYWWJdqp',
-                      ],
-                  }
-
-            const event = new window.CustomEvent('message', {
-                data: {
-                    type: responseType,
-                    payload,
-                },
-            })
-
-            window.dispatchEvent(event)
-            mockPopup.close()
-        }
-    }, 100)
+        mockPopup.close()
+    }, 150)
 
     return mockPopup
 }
+
+// Mock the buoy module by replacing the module exports
+const buoyModule = require('@greymass/buoy')
+buoyModule.send = mockSend
+buoyModule.receive = mockReceive
 
 // Add browser globals
 global.HTMLCanvasElement = window.HTMLCanvasElement

@@ -2,7 +2,7 @@
 
 > ⚠️ **WARNING**: This project is currently under development and not ready for production use. Use at your own risk.
 
-A wallet plugin for Wharf that allows signing transactions using a web-based authenticator service. This plugin opens a popup window to handle authentication and transaction signing through a web interface.
+A wallet plugin for Wharf that allows signing transactions using a web-based authenticator service. This plugin opens a popup window to handle authentication and transaction signing through a web interface using the [@greymass/buoy](https://www.npmjs.com/package/@greymass/buoy) messaging system.
 
 ## Features
 
@@ -11,6 +11,8 @@ A wallet plugin for Wharf that allows signing transactions using a web-based aut
 -   Support for transaction signing
 -   Currently only supports Jungle 4 testnet
 -   Configurable web authenticator URL
+-   Uses buoy messaging system for secure communication between popup and parent window
+-   Sealed message encryption for enhanced security
 
 ## Installation
 
@@ -26,7 +28,8 @@ import { WalletPluginWebAuthenticator } from '@wharfkit/wallet-plugin-web-authen
 
 // Initialize the wallet plugin
 const webAuthenticator = new WalletPluginWebAuthenticator({
-    webAuthenticatorUrl: 'https://your-authenticator-url.com' // Optional, defaults to http://localhost:5174
+    webAuthenticatorUrl: 'https://your-authenticator-url.com', // Optional, defaults to http://localhost:5174
+    buoyServiceUrl: 'https://cb.anchor.link' // Optional, defaults to https://cb.anchor.link
 })
 
 // Create a new SessionKit instance with the plugin
@@ -44,6 +47,7 @@ The plugin accepts the following configuration options:
 ```typescript
 interface WebAuthenticatorOptions {
     webAuthenticatorUrl?: string // The URL of your web authenticator service
+    buoyServiceUrl?: string // The URL of the buoy messaging service
 }
 ```
 
@@ -53,21 +57,27 @@ Your web authenticator service should implement the following endpoints:
 
 -   `/sign` - Handles both login requests and transaction signing
     -   Query Parameters:
-        -   `esr` - The encoded signing request
-        -   `chain` - The chain name
+        -   `sealed` - The sealed (encrypted) signing request
+        -   `nonce` - The nonce used for sealing the request
+        -   `chain` - The chain ID (for login) or chain name (for signing)
+        -   `requestKey` - The public key for the request
+        -   `buoyChannel` - The buoy channel ID for messaging
         -   `accountName` - (Only for signing) The account name
         -   `permissionName` - (Only for signing) The permission name
+        -   `appName` - (Only for signing) The app name
 
-The authenticator should respond by posting a message to the opener window with the following format:
+The authenticator should respond by sending a message through the buoy channel with the following format:
 
 For login:
 
 ```typescript
 {
+    type: 'wharf:login:response',
     payload: {
         cid: string // Chain ID
         sa: string // Signing account
         sp: string // Signing permission
+        link_key: string // Public key for the link
         sig?: string // Optional: Signature proving ownership of the account for third-party verification
     }
 }
@@ -77,9 +87,39 @@ For signing:
 
 ```typescript
 {
-    signatures: string[]  // Array of signatures
+    payload: {
+        signatures: string[]  // Array of signatures
+        // Or alternatively, individual signature fields:
+        sig: string // Signature
+        sig0: string // Alternative signature field
+        tx: string // Transaction ID
+        sa: string // Signer authority
+        sp: string // Signer permission
+        rbn: string // Reference block num
+        rid: string // Reference block ID
+        ex: string // Expiration
+        req: string // Original request
+        cid: string // Chain ID
+    }
 }
 ```
+
+### Buoy Messaging
+
+This plugin uses the [@greymass/buoy](https://www.npmjs.com/package/@greymass/buoy) library for secure messaging between the popup window and the parent window. The buoy system provides:
+
+-   **Secure Communication**: Messages are sent through a trusted buoy service
+-   **Channel-based Messaging**: Each request gets a unique channel ID
+-   **Timeout Handling**: Built-in timeout and error handling
+-   **Cross-origin Support**: Works across different domains
+
+### Sealed Messages
+
+All requests are sealed (encrypted) before being sent to the web authenticator service using the `@wharfkit/sealed-messages` library. This provides:
+
+-   **End-to-end Encryption**: Messages are encrypted between the plugin and authenticator
+-   **Request Integrity**: Ensures messages cannot be tampered with
+-   **Nonce-based Security**: Each request uses a unique nonce for additional security
 
 ### Identity Proof
 
@@ -136,15 +176,18 @@ When popup windows fail to open (due to browser blocking or other issues), the p
 
 ## Security Considerations
 
--   The plugin verifies the origin of messages from the popup window against the configured authenticator URL
+-   The plugin uses buoy messaging for secure communication between popup and parent window
+-   All requests are sealed (encrypted) before transmission
 -   Popups must be enabled in the user's browser
 -   The web authenticator service should implement appropriate security measures
+-   The buoy service should be trusted and properly configured
 
 ## Limitations
 
 -   Currently only supports the Jungle 4 testnet chain
 -   Requires popup windows to be enabled in the browser
 -   Web authenticator service must be available and properly configured
+-   Requires a buoy service for messaging (defaults to https://cb.anchor.link)
 
 ---
 

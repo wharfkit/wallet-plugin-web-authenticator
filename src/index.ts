@@ -18,20 +18,25 @@ import {
     WalletPluginMetadata,
     WalletPluginSignResponse,
 } from '@wharfkit/session'
-import {PrivateKey, PublicKey, UInt64} from '@wharfkit/antelope'
+import {receive} from '@greymass/buoy'
+import {PrivateKey, PublicKey, Signature, UInt64} from '@wharfkit/antelope'
 import {sealMessage} from '@wharfkit/sealed-messages'
 
 interface WebAuthenticatorOptions {
     /** The URL of the web authenticator service */
     webAuthenticatorUrl?: string
+    /** The buoy service URL for messaging */
+    buoyServiceUrl?: string
 }
 
 export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implements WalletPlugin {
     private webAuthenticatorUrl: string
+    private buoyServiceUrl: string
 
     constructor(options: WebAuthenticatorOptions = {}) {
         super()
         this.webAuthenticatorUrl = options.webAuthenticatorUrl || 'http://localhost:5174'
+        this.buoyServiceUrl = options.buoyServiceUrl || 'https://cb.anchor.link'
     }
 
     /**
@@ -66,7 +71,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     }
 
     /**
-     * Opens a popup window with the given URL and waits for it to complete
+     * Opens a popup window with the given URL and waits for it to complete using buoy messaging
      */
     private async openPopup(
         url: string,
@@ -74,7 +79,15 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
         context?: LoginContext | TransactContext
     ): Promise<any> {
         return new Promise((resolve, reject) => {
-            const popup = window.open(url, 'Web Authenticator', 'width=400,height=600')
+            // Generate a unique channel ID for this request, including the type
+            const channelId = `wharf-web-auth-${type}-${Date.now()}-${Math.random()
+                .toString(36)
+                .substr(2, 9)}`
+
+            // Add the buoy channel to the URL
+            const urlWithChannel = `${url}${url.includes('?') ? '&' : '?'}buoyChannel=${channelId}`
+
+            const popup = window.open(urlWithChannel, 'Web Authenticator', 'width=400,height=600')
 
             if (!popup) {
                 // Popup failed to open - provide retry option
@@ -108,20 +121,27 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 }
             }, 1000)
 
-            const baseUrlOrigin = new URL(this.webAuthenticatorUrl).origin
-            const handler = (event: MessageEvent) => {
-                // Verify origin matches our authenticator URL
-                if (event.origin !== baseUrlOrigin) {
-                    return
+            // Use an async IIFE to handle the buoy receive
+            ;(async () => {
+                try {
+                    // Wait for response using buoy
+                    const response = await receive({
+                        service: this.buoyServiceUrl,
+                        channel: channelId,
+                        timeout: 300000, // 5 minutes timeout
+                        json: true,
+                    })
+
+                    // Clean up
+                    clearInterval(checkClosed)
+                    popup.close()
+                    resolve(response)
+                } catch (error) {
+                    clearInterval(checkClosed)
+                    popup.close()
+                    reject(error)
                 }
-
-                window.removeEventListener('message', handler)
-                clearInterval(checkClosed)
-                popup.close()
-                resolve(event.data)
-            }
-
-            window.addEventListener('message', handler)
+            })()
         })
     }
 
@@ -139,7 +159,18 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             // Create the identity request to be presented to the user
             const {request} = await createIdentityRequest(context, '')
 
-            const loginUrl = `${this.webAuthenticatorUrl}/sign?esr=${request.encode()}&chain=${
+            // Seal the identity request using the shared secret
+            const nonce = UInt64.from(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER))
+            const sealedRequest = await sealMessage(
+                request.encode(),
+                PrivateKey.from(this.data.privateKey),
+                PublicKey.from(requestPublicKey),
+                nonce
+            )
+
+            const loginUrl = `${this.webAuthenticatorUrl}/sign?sealed=${sealedRequest.toString(
+                'hex'
+            )}&nonce=${nonce.toString()}&chain=${
                 context.chain?.id
             }&requestKey=${requestPublicKey.toString()}`
 
@@ -226,21 +257,27 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
 
             const response = await this.openPopup(signUrl, 'sign', context)
 
-            const wasSuccessful =
-                isCallback(response.payload) &&
-                extractSignaturesFromCallback(response.payload).length > 0
+            let extractedSignatures: Signature[] = []
+            try {
+                extractedSignatures = extractSignaturesFromCallback(response.payload)
+            } catch (error) {
+                // If extraction fails, try to get signatures from the payload directly
+                if (response.payload.sig) {
+                    extractedSignatures = [Signature.from(response.payload.sig)]
+                } else if (response.payload.signatures) {
+                    extractedSignatures = response.payload.signatures.map((sig: string) =>
+                        Signature.from(sig)
+                    )
+                }
+            }
+
+            const wasSuccessful = isCallback(response.payload) && extractedSignatures.length > 0
 
             if (wasSuccessful) {
-                // If the callback was resolved, create a new request from the response
-                const resolvedRequest = await ResolvedSigningRequest.fromPayload(
-                    response.payload,
-                    context.esrOptions
-                )
-
-                // Return the new request and the signatures from the wallet
+                // Return the signatures from the wallet
                 return {
-                    signatures: extractSignaturesFromCallback(response.payload),
-                    resolved: resolvedRequest,
+                    signatures: extractedSignatures,
+                    resolved: resolved, // Use the original resolved request instead of creating a new one
                 }
             } else {
                 throw new Error('Signing failed: No signatures returned')
