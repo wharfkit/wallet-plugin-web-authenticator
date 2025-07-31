@@ -1,5 +1,5 @@
 import {Chains, SessionKit} from '@wharfkit/session'
-import {PermissionLevel, Signature, APIClient} from '@wharfkit/antelope'
+import {PermissionLevel, Signature, APIClient, PrivateKey} from '@wharfkit/antelope'
 import {
     mockChainDefinition,
     mockPermissionLevel,
@@ -210,8 +210,11 @@ suite('wallet plugin', function () {
             webAuthenticatorUrl: 'https://web-authenticator.greymass.com',
         })
 
-        plugin.data.privateKey = mockPrivateKey
-        plugin.data.publicKey = mockPublicKey
+        // Use different keys for sign test to avoid conflicts with login test
+        const signPrivateKey = PrivateKey.generate('K1')
+        const signPublicKey = signPrivateKey.toPublic()
+        plugin.data.privateKey = signPrivateKey
+        plugin.data.publicKey = signPublicKey
 
         const mockResolvedSigningRequest = await makeMockResolvedSigningRequest()
 

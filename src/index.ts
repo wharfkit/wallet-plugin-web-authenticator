@@ -76,13 +76,14 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     private async openPopup(
         url: string,
         type: 'sign' | 'identity' = 'sign',
-        context?: LoginContext | TransactContext
+        context?: LoginContext | TransactContext,
+        requestKey?: string
     ): Promise<any> {
         return new Promise((resolve, reject) => {
-            // Generate a unique channel ID for this request, including the type
-            const channelId = `wharf-web-auth-${type}-${Date.now()}-${Math.random()
-                .toString(36)
-                .substr(2, 9)}`
+            // Use the request key as the channel ID for consistency
+            const channelId =
+                requestKey ||
+                `wharf-web-auth-${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
             // Add the buoy channel to the URL
             const urlWithChannel = `${url}${url.includes('?') ? '&' : '?'}buoyChannel=${channelId}`
@@ -159,25 +160,16 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             // Create the identity request to be presented to the user
             const {request} = await createIdentityRequest(context, '')
 
-            // Seal the identity request using the shared secret
-            const nonce = UInt64.from(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER))
-            const sealedRequest = await sealMessage(
-                request.encode(),
-                PrivateKey.from(this.data.privateKey),
-                PublicKey.from(requestPublicKey),
-                nonce
-            )
-
-            const loginUrl = `${this.webAuthenticatorUrl}/sign?sealed=${sealedRequest.toString(
-                'hex'
-            )}&nonce=${nonce.toString()}&chain=${
-                context.chain?.id
-            }&requestKey=${requestPublicKey.toString()}`
+            // Don't seal the identity request - the web authenticator doesn't have the request key yet
+            const loginUrl = `${this.webAuthenticatorUrl}/sign?request=${request
+                .encode()
+                .toString()}&chain=${context.chain?.id}&requestKey=${requestPublicKey.toString()}`
 
             const {payload}: {payload: CallbackPayload} = await this.openPopup(
                 loginUrl,
                 'identity',
-                context
+                context,
+                requestPublicKey.toString()
             )
 
             this.data.publicKey = payload.link_key
@@ -255,7 +247,12 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 context.appName
             }&requestKey=${String(PrivateKey.from(this.data.privateKey).toPublic())}`
 
-            const response = await this.openPopup(signUrl, 'sign', context)
+            const response = await this.openPopup(
+                signUrl,
+                'sign',
+                context,
+                this.data.publicKey.toString()
+            )
 
             let extractedSignatures: Signature[] = []
             try {

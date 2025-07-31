@@ -14,6 +14,7 @@ global.document = window.document
 
 // Mock buoy library
 const mockBuoyResponses = new Map<string, any>()
+const processedChannels = new Set<string>()
 
 // Mock the buoy send function
 const mockSend = async (message: any, options: any) => {
@@ -39,12 +40,20 @@ const mockReceive = async (options: any) => {
     }
 
     // Default response based on channel content
-    if (channel.includes('wharf-web-auth')) {
-        // Extract the request type from the channel ID
-        const channelParts = channel.split('-')
-        const requestType = channelParts[3] // wharf-web-auth-{type}-timestamp-random
+    // Handle both old format (wharf-web-auth-{type}-timestamp-random) and new format (PUB_K1_...)
+    if (channel.includes('wharf-web-auth') || channel.startsWith('PUB_K1_')) {
+        // Determine if this is a login request
+        // For old format: check if channel contains 'identity'
+        // For new format: track which channels we've processed to differentiate login vs sign
+        const isLoginRequest = channel.includes('identity') || !processedChannels.has(channel)
 
-        const isLoginRequest = requestType === 'identity'
+        // Mark this channel as processed
+        processedChannels.add(channel)
+
+        // Reset processed channels periodically to allow for multiple tests
+        if (processedChannels.size > 10) {
+            processedChannels.clear()
+        }
 
         if (isLoginRequest) {
             // Login response
@@ -59,10 +68,10 @@ const mockReceive = async (options: any) => {
                 },
             }
         } else {
-            // Sign response - this should match the format expected by isCallback and extractSignaturesFromCallback
+            // Sign response - use ESR callback format to ensure isCallback returns true
             return {
                 payload: {
-                    // Use the format that was working in the original test
+                    // ESR callback format that should make isCallback return true
                     tx: '01234567890123456789',
                     sig: String(mockSignature),
                     sig0: String(mockSignature),
@@ -73,6 +82,7 @@ const mockReceive = async (options: any) => {
                     ex: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
                     req: 'mock-request-encoded',
                     cid: '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d',
+                    callback: 'https://example.com/callback',
                 },
             }
         }
