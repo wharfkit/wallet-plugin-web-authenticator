@@ -161,7 +161,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             const {request} = await createIdentityRequest(context, '')
 
             // Don't seal the identity request - the web authenticator doesn't have the request key yet
-            const loginUrl = `${this.webAuthenticatorUrl}/sign?request=${request
+            const loginUrl = `${this.webAuthenticatorUrl}/sign?esr=${request
                 .encode()
                 .toString()}&chain=${context.chain?.id}&requestKey=${requestPublicKey.toString()}`
 
@@ -245,7 +245,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 context.accountName
             }&permissionName=${context.permissionName}&appName=${
                 context.appName
-            }&requestKey=${String(PrivateKey.from(this.data.privateKey).toPublic())}`
+            }&requestKey=${this.data.publicKey.toString()}`
 
             const response = await this.openPopup(
                 signUrl,

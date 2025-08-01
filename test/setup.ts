@@ -14,7 +14,7 @@ global.document = window.document
 
 // Mock buoy library
 const mockBuoyResponses = new Map<string, any>()
-const processedChannels = new Set<string>()
+const channelCounts = new Map<string, number>()
 
 // Mock the buoy send function
 const mockSend = async (message: any, options: any) => {
@@ -42,17 +42,19 @@ const mockReceive = async (options: any) => {
     // Default response based on channel content
     // Handle both old format (wharf-web-auth-{type}-timestamp-random) and new format (PUB_K1_...)
     if (channel.includes('wharf-web-auth') || channel.startsWith('PUB_K1_')) {
+        // Count how many times we've seen this channel
+        const count = channelCounts.get(channel) || 0
+        channelCounts.set(channel, count + 1)
+
         // Determine if this is a login request
         // For old format: check if channel contains 'identity'
-        // For new format: track which channels we've processed to differentiate login vs sign
-        const isLoginRequest = channel.includes('identity') || !processedChannels.has(channel)
+        // For new format: treat first occurrence as login, second as sign
+        // If this is a PUB_K1_ channel and it's not the first occurrence, treat it as sign
+        const isLoginRequest = channel.includes('identity') || count === 0
 
-        // Mark this channel as processed
-        processedChannels.add(channel)
-
-        // Reset processed channels periodically to allow for multiple tests
-        if (processedChannels.size > 10) {
-            processedChannels.clear()
+        // Reset channel counts periodically to allow for multiple tests
+        if (channelCounts.size > 10) {
+            channelCounts.clear()
         }
 
         if (isLoginRequest) {
