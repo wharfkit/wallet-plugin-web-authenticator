@@ -1,5 +1,5 @@
 import {Chains, SessionKit} from '@wharfkit/session'
-import {PermissionLevel, Signature, APIClient} from '@wharfkit/antelope'
+import {PermissionLevel, Signature, APIClient, PrivateKey} from '@wharfkit/antelope'
 import {
     mockChainDefinition,
     mockPermissionLevel,
@@ -202,10 +202,7 @@ suite('wallet plugin', function () {
             (loginResponse as any).identityProof.signedRequest,
             'Identity proof signed request should be included'
         )
-        assert.equal(
-            (loginResponse as any).identityProof.signature,
-            'SIG_K1_KBub1qmdiPpWA2XKKEZEG3PLZPMP3FnYJuH4gYrKzAQKdxYnJjFMpVWdxEwmFFodgGaNnAMbR4kaFkuXBtJnZLCYWWJdqp'
-        )
+        assert.equal((loginResponse as any).identityProof.signature, String(mockSignature))
     })
 
     test('sign functionality', async function () {
@@ -213,14 +210,25 @@ suite('wallet plugin', function () {
             webAuthenticatorUrl: 'https://web-authenticator.greymass.com',
         })
 
-        plugin.data.privateKey = mockPrivateKey
-        plugin.data.publicKey = mockPublicKey
+        // Use different keys for the sign test to avoid channel ID conflicts
+        const signPrivateKey = PrivateKey.generate('K1')
+        const signPublicKey = signPrivateKey.toPublic()
+        plugin.data.privateKey = signPrivateKey
+        plugin.data.publicKey = signPublicKey
 
         const mockResolvedSigningRequest = await makeMockResolvedSigningRequest()
 
         // Start the sign process
         const signPromise = plugin.sign(mockResolvedSigningRequest, {
             chain: Chains.Jungle4,
+            ui: mockUI,
+            fetch: global.fetch,
+            hooks: {},
+            walletPlugins: [],
+            arbitrary: {},
+            uiRequirements: {},
+            addHook: () => {},
+            getClient: () => new APIClient({url: chain.url}),
             esrOptions: {
                 abiProvider: {
                     getAbi: async (account) => {
@@ -231,32 +239,7 @@ suite('wallet plugin', function () {
                     },
                 },
             },
-        } as TransactContext)
-
-        // Simulate the popup response
-        setTimeout(() => {
-            if (messageHandler) {
-                messageHandler(
-                    new MessageEvent('message', {
-                        origin: 'https://web-authenticator.greymass.com',
-                        data: {
-                            payload: {
-                                tx: '01234567890123456789', // Mock transaction ID
-                                sig: String(mockSignature),
-                                sig0: String(mockSignature),
-                                sa: 'test', // Signer authority
-                                sp: 'active', // Signer permission
-                                rbn: '1234', // Reference block num
-                                rid: '5678', // Reference block ID
-                                ex: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // Expiration
-                                req: mockResolvedSigningRequest.request.encode(), // Original request
-                                cid: String(Chains.Jungle4.id), // Chain ID
-                            },
-                        },
-                    })
-                )
-            }
-        }, 0)
+        } as unknown as TransactContext)
 
         // Test sign functionality
         const signResponse = await signPromise
@@ -265,5 +248,38 @@ suite('wallet plugin', function () {
         assert.isTrue(signResponse.signatures.length === 1)
         assert.instanceOf(signResponse.signatures[0], Signature)
         assert.exists(signResponse.resolved)
+    })
+
+    test('popup success with UI feedback', async function () {
+        const plugin = new WalletPluginWebAuthenticator({
+            webAuthenticatorUrl: 'https://web-authenticator.greymass.com',
+        })
+
+        // Mock login context with UI
+        const loginContext = {
+            chain,
+            chains: [chain],
+            fetch: global.fetch,
+            hooks: {},
+            permissionLevel: PermissionLevel.from('wharfkit1131@test'),
+            ui: mockUI,
+            walletPlugins: [],
+            arbitrary: {},
+            uiRequirements: {},
+            addHook: () => {},
+            getClient: () => new APIClient({url: chain.url}),
+            esrOptions: {},
+        } as unknown as LoginContext
+
+        // Start the login process
+        const loginPromise = plugin.login(loginContext)
+
+        // Test login functionality
+        const loginResponse = await loginPromise
+
+        // Verify login response
+        assert.equal(loginResponse.chain.toString(), chainId)
+        assert.equal(loginResponse.permissionLevel.actor.toString(), 'wharfkit1131')
+        assert.equal(loginResponse.permissionLevel.permission.toString(), 'test')
     })
 })
