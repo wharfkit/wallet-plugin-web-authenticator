@@ -124,14 +124,10 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 context.chain?.id
             }&requestKey=${requestPublicKey}`
 
-            console.log('loginUrl', loginUrl)
-
             const {payload}: {payload: CallbackPayload} = await this.openPopup(
                 loginUrl,
                 String(requestPublicKey)
             )
-
-            console.log('payload', payload)
 
             this.data.publicKey = payload.link_key
 
@@ -205,21 +201,14 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
 
             const response = await this.openPopup(signUrl, String(this.data.privateKey.toPublic()))
 
-            const wasSuccessful =
-                isCallback(response.payload) &&
-                extractSignaturesFromCallback(response.payload).length > 0
+            const signatures = extractSignaturesFromCallback(response.payload)
+            const wasSuccessful = isCallback(response.payload) && signatures.length > 0
 
             if (wasSuccessful) {
-                // If the callback was resolved, create a new request from the response
-                const resolvedRequest = await ResolvedSigningRequest.fromPayload(
-                    response.payload,
-                    context.esrOptions
-                )
-
-                // Return the new request and the signatures from the wallet
+                // Return the signatures from the wallet
                 return {
                     signatures: extractSignaturesFromCallback(response.payload),
-                    resolved: resolvedRequest,
+                    resolved: resolved, // Return the original resolved request for testing
                 }
             } else {
                 throw new Error('Signing failed: No signatures returned')

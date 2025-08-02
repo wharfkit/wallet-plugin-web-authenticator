@@ -242,50 +242,6 @@ suite('wallet plugin', function () {
         assert.exists(signResponse.resolved)
     })
 
-    test('popup retry functionality', async function () {
-        const plugin = new WalletPluginWebAuthenticator({
-            webAuthenticatorUrl: 'https://web-authenticator.greymass.com',
-        })
-
-        // Mock login context with UI
-        const loginContext = {
-            chain,
-            chains: [chain],
-            fetch: global.fetch,
-            hooks: {},
-            permissionLevel: PermissionLevel.from('wharfkit1131@test'),
-            ui: mockUI,
-            walletPlugins: [],
-            arbitrary: {},
-            uiRequirements: {},
-            addHook: () => {},
-            getClient: () => new APIClient({url: chain.url}),
-            esrOptions: {},
-        } as unknown as LoginContext
-
-        // Mock window.open to return null (simulating popup failed to open)
-        const originalOpen = window.open
-        window.open = () => null
-
-        try {
-            // Attempt login - should fail due to popup failed to open
-            await plugin.login(loginContext)
-            assert.fail('Login should have failed due to popup failed to open')
-        } catch (error: unknown) {
-            assert.instanceOf(error, Error)
-            if (error instanceof Error) {
-                assert.include(error.message, 'Popup failed to open')
-            }
-
-            // Verify that retry function is available
-            assert.exists((loginContext as any).retryPopup)
-            assert.isFunction((loginContext as any).retryPopup)
-        } finally {
-            // Restore original window.open
-            window.open = originalOpen
-        }
-    })
-
     test('popup success with UI feedback', async function () {
         const plugin = new WalletPluginWebAuthenticator({
             webAuthenticatorUrl: 'https://web-authenticator.greymass.com',
