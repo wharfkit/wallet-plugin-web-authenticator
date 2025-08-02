@@ -221,6 +221,14 @@ suite('wallet plugin', function () {
         // Start the sign process
         const signPromise = plugin.sign(mockResolvedSigningRequest, {
             chain: Chains.Jungle4,
+            ui: mockUI,
+            fetch: global.fetch,
+            hooks: {},
+            walletPlugins: [],
+            arbitrary: {},
+            uiRequirements: {},
+            addHook: () => {},
+            getClient: () => new APIClient({url: chain.url}),
             esrOptions: {
                 abiProvider: {
                     getAbi: async (account) => {
@@ -231,7 +239,7 @@ suite('wallet plugin', function () {
                     },
                 },
             },
-        } as TransactContext)
+        } as unknown as TransactContext)
 
         // Test sign functionality
         const signResponse = await signPromise

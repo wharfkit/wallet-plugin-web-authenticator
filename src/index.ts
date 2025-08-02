@@ -18,6 +18,7 @@ import {
     WalletPluginLoginResponse,
     WalletPluginMetadata,
     WalletPluginSignResponse,
+    UserInterface,
 } from '@wharfkit/session'
 import {PrivateKey, PublicKey, UInt64} from '@wharfkit/antelope'
 import {sealMessage} from '@wharfkit/sealed-messages'
@@ -32,6 +33,7 @@ interface WebAuthenticatorOptions {
 export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implements WalletPlugin {
     private webAuthenticatorUrl: string
     private buoyServiceUrl: string
+    private static promptCount: number = 0
 
     constructor(options: WebAuthenticatorOptions = {}) {
         super()
@@ -73,37 +75,133 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     /**
      * Opens a popup window with the given URL and waits for it to complete
      */
-    private async openPopup(url: string, channelId: string): Promise<{payload: CallbackPayload}> {
+    private async openPopup(
+        url: string,
+        channelId: string,
+        ui?: UserInterface
+    ): Promise<{payload: CallbackPayload}> {
         return new Promise((resolve, reject) => {
-            const popup = window.open(url, 'Web Authenticator', 'width=400,height=600')
+            try {
+                // Show status message using WharfKit UI
+                ui?.status('Opening authenticator popup...')
 
-            if (!popup) {
-                reject(new Error('Popup blocked - please enable popups for this site'))
-                return
-            }
+                let popup: Window | null = null
 
-            const checkClosed = setInterval(() => {
-                if (popup.closed) {
-                    clearInterval(checkClosed)
-                    reject(new Error('Transaction cancelled'))
+                popup = window.open(
+                    url,
+                    'Web Authenticator',
+                    'width=500,height=700,scrollbars=yes,resizable=yes'
+                )
+
+                if (!popup) {
+                    throw new Error('Popup blocked - please enable popups for this site')
                 }
-            }, 1000)
 
-            receive({
-                service: this.buoyServiceUrl,
-                channel: channelId,
-                timeout: 300000, // 5 minutes timeout
-                json: true,
-            })
-                .then((response) => {
-                    clearInterval(checkClosed)
-                    popup.close()
-                    resolve(JSON.parse(response))
+                // Update status
+                ui?.status('Please approve the transaction in the popup that just opened')
+
+                const checkClosed = setInterval(() => {
+                    if (popup?.closed) {
+                        clearInterval(checkClosed)
+                        ui?.status('Transaction cancelled')
+                        reject(new Error('Transaction cancelled by user'))
+                    }
+                }, 1000)
+
+                receive({
+                    service: this.buoyServiceUrl,
+                    channel: channelId,
+                    timeout: 300000, // 5 minutes timeout
+                    json: true,
                 })
-                .catch((error) => {
-                    reject(error)
-                })
+                    .then((response) => {
+                        clearInterval(checkClosed)
+                        popup?.close()
+                        ui?.status('Transaction approved successfully')
+                        // Reset the prompt count on successful completion
+                        WalletPluginWebAuthenticator.promptCount = 0
+                        resolve(JSON.parse(response))
+                    })
+                    .catch((error) => {
+                        clearInterval(checkClosed)
+                        popup?.close()
+                        throw error
+                    })
+            } catch (error) {
+                // Show prompt only once, then just show the error
+                if (WalletPluginWebAuthenticator.promptCount === 0) {
+                    this.showManualPopupPrompt(
+                        url,
+                        channelId,
+                        resolve,
+                        reject,
+                        ui,
+                        error instanceof Error ? error : new Error(String(error))
+                    )
+                } else {
+                    // Just show the error directly after the first prompt
+                    const errorMessage = error instanceof Error ? error.message : String(error)
+                    ui?.status(`Error: ${errorMessage}`)
+                    reject(error instanceof Error ? error : new Error(String(error)))
+                }
+            } finally {
+                // Reset the prompt count on successful completion
+                WalletPluginWebAuthenticator.promptCount = 0
+            }
         })
+    }
+
+    /**
+     * Shows error prompt and handles retry logic
+     */
+    private showManualPopupPrompt(
+        url: string,
+        channelId: string,
+        resolve: (value: {payload: CallbackPayload}) => void,
+        reject: (reason: Error) => void,
+        ui?: UserInterface,
+        error?: Error
+    ): void {
+        const errorMessage = error?.message || 'Unknown error occurred'
+        ui?.status(`Error: ${errorMessage}`)
+
+        // Increment the prompt count
+        WalletPluginWebAuthenticator.promptCount++
+
+        // Use WharfKit's prompt to show fallback options
+        const promptPromise = ui?.prompt({
+            title: 'Open Popup',
+            body: `The popup was blocked. Please open it manually.`,
+            elements: [
+                {
+                    type: 'button',
+                    label: 'Open Popup',
+                    data: 'open',
+                },
+            ],
+        })
+
+        // Handle the prompt response
+        promptPromise
+            ?.then((response) => {
+                // Check the response data to determine which button was clicked
+                if (response && typeof response === 'object' && 'data' in response) {
+                    const data = (response as any).data
+                    if (data === 'open') {
+                        // Recursively call this.openPopup
+                        this.openPopup(url, channelId, ui).then(resolve).catch(reject)
+                    }
+                }
+            })
+            .catch((promptError) => {
+                reject(promptError)
+            })
+
+        // Auto-timeout after 30 seconds if no user interaction
+        setTimeout(() => {
+            promptPromise?.cancel('Popup timeout - no user interaction')
+            reject(new Error('Popup timeout - no user interaction'))
+        }, 30000)
     }
 
     /**
@@ -126,7 +224,8 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
 
             const {payload}: {payload: CallbackPayload} = await this.openPopup(
                 loginUrl,
-                String(requestPublicKey)
+                String(requestPublicKey),
+                context.ui
             )
 
             this.data.publicKey = payload.link_key
@@ -199,7 +298,11 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 context.appName
             }&requestKey=${String(PrivateKey.from(this.data.privateKey).toPublic())}`
 
-            const response = await this.openPopup(signUrl, String(this.data.privateKey.toPublic()))
+            const response = await this.openPopup(
+                signUrl,
+                String(this.data.privateKey.toPublic()),
+                context.ui
+            )
 
             const signatures = extractSignaturesFromCallback(response.payload)
             const wasSuccessful = isCallback(response.payload) && signatures.length > 0
@@ -218,6 +321,53 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 throw new Error(`Signing failed: ${error.message}`)
             }
             throw new Error('Signing failed: Unknown error')
+        }
+    }
+
+    /**
+     * Gets a stored response for a channel (to be implemented by the web authenticator)
+     */
+    private getStoredResponse(channelId: string): {payload: any} | null {
+        // This would be implemented by the web authenticator service
+        // For now, we'll use a mock response for testing
+        return this.getMockResponse(channelId)
+    }
+
+    /**
+     * Gets a mock response for testing purposes
+     */
+    private getMockResponse(channelId: string): {payload: any} | null {
+        // Simple mock implementation for testing
+        // In a real implementation, this would check with the web authenticator service
+
+        // Use a simple counter to determine if this is a login or sign request
+        const isLoginRequest = channelId.includes('identity') || channelId.length > 50 // Simple heuristic
+
+        if (isLoginRequest) {
+            return {
+                payload: {
+                    cid: '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d',
+                    sa: 'wharfkit1131',
+                    sp: 'test',
+                    link_key: 'PUB_K1_6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5BoDq63',
+                    sig: 'SIG_K1_mock_signature_for_testing',
+                },
+            }
+        } else {
+            return {
+                payload: {
+                    tx: '01234567890123456789',
+                    sig: 'SIG_K1_mock_signature_for_testing',
+                    sa: 'wharfkit1131',
+                    sp: 'test',
+                    rbn: '1234',
+                    rid: '5678',
+                    ex: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                    req: 'mock-request-encoded',
+                    cid: '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d',
+                    callback: 'https://example.com/callback',
+                },
+            }
         }
     }
 }
