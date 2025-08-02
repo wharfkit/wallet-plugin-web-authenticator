@@ -210,10 +210,11 @@ suite('wallet plugin', function () {
             webAuthenticatorUrl: 'https://web-authenticator.greymass.com',
         })
 
-        // Use the same keys as the login test to ensure consistent channel IDs
-        // This will make the sign test use the same channel ID as the login test
-        plugin.data.privateKey = mockPrivateKey
-        plugin.data.publicKey = mockPublicKey
+        // Use different keys for the sign test to avoid channel ID conflicts
+        const signPrivateKey = PrivateKey.generate('K1')
+        const signPublicKey = signPrivateKey.toPublic()
+        plugin.data.privateKey = signPrivateKey
+        plugin.data.publicKey = signPublicKey
 
         const mockResolvedSigningRequest = await makeMockResolvedSigningRequest()
 

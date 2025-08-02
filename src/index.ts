@@ -133,6 +133,8 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                         json: true,
                     })
 
+                    console.log('buoy receive response', response)
+
                     // Clean up
                     clearInterval(checkClosed)
                     popup.close()
@@ -161,16 +163,37 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             const {request} = await createIdentityRequest(context, '')
 
             // Don't seal the identity request - the web authenticator doesn't have the request key yet
-            const loginUrl = `${this.webAuthenticatorUrl}/sign?esr=${request
+            const loginUrl = `${this.webAuthenticatorUrl}/sign?type=login&esr=${request
                 .encode()
                 .toString()}&chain=${context.chain?.id}&requestKey=${requestPublicKey.toString()}`
 
-            const {payload}: {payload: CallbackPayload} = await this.openPopup(
+            const response = await this.openPopup(
                 loginUrl,
                 'identity',
                 context,
                 requestPublicKey.toString()
             )
+
+            console.log('response', response)
+
+            // Handle different response structures
+            let payload: CallbackPayload
+            if (response && response.payload) {
+                // Expected structure: { payload: { ... } }
+                payload = response.payload
+            } else {
+                throw new Error(
+                    `Login failed: Invalid response structure. Received: ${JSON.stringify(
+                        response
+                    )}`
+                )
+            }
+
+            if (!payload.link_key) {
+                throw new Error(
+                    `Login failed: No link_key in response. Payload: ${JSON.stringify(payload)}`
+                )
+            }
 
             this.data.publicKey = payload.link_key
 
@@ -239,9 +262,11 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 nonce
             )
 
-            const signUrl = `${this.webAuthenticatorUrl}/sign?sealed=${sealedRequest.toString(
+            const signUrl = `${
+                this.webAuthenticatorUrl
+            }/sign?type=sign&sealed=${sealedRequest.toString(
                 'hex'
-            )}&nonce=${nonce.toString()}&chain=${context.chain?.name}&accountName=${
+            )}&nonce=${nonce.toString()}&chain=${context.chain?.id}&accountName=${
                 context.accountName
             }&permissionName=${context.permissionName}&appName=${
                 context.appName
@@ -254,21 +279,37 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 this.data.publicKey.toString()
             )
 
+            // Handle different response structures
+            let payload: any
+            if (response && response.payload) {
+                // Expected structure: { payload: { ... } }
+                payload = response.payload
+            } else if (response && (response.sig || response.signatures)) {
+                // Direct payload structure: { sig: "...", ... }
+                payload = response
+            } else {
+                throw new Error(
+                    `Signing failed: Invalid response structure. Received: ${JSON.stringify(
+                        response
+                    )}`
+                )
+            }
+
             let extractedSignatures: Signature[] = []
             try {
-                extractedSignatures = extractSignaturesFromCallback(response.payload)
+                extractedSignatures = extractSignaturesFromCallback(payload)
             } catch (error) {
                 // If extraction fails, try to get signatures from the payload directly
-                if (response.payload.sig) {
-                    extractedSignatures = [Signature.from(response.payload.sig)]
-                } else if (response.payload.signatures) {
-                    extractedSignatures = response.payload.signatures.map((sig: string) =>
+                if (payload.sig) {
+                    extractedSignatures = [Signature.from(payload.sig)]
+                } else if (payload.signatures) {
+                    extractedSignatures = payload.signatures.map((sig: string) =>
                         Signature.from(sig)
                     )
                 }
             }
 
-            const wasSuccessful = isCallback(response.payload) && extractedSignatures.length > 0
+            const wasSuccessful = isCallback(payload) && extractedSignatures.length > 0
 
             if (wasSuccessful) {
                 // Return the signatures from the wallet

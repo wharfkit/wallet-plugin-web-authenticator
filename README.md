@@ -57,9 +57,11 @@ Your web authenticator service should implement the following endpoints:
 
 -   `/sign` - Handles both login requests and transaction signing
     -   Query Parameters:
-        -   `sealed` - The sealed (encrypted) signing request
-        -   `nonce` - The nonce used for sealing the request
-        -   `chain` - The chain ID (for login) or chain name (for signing)
+        -   `type` - The type of request: `login` or `sign`
+        -   `esr` - (For login) The encoded identity request
+        -   `sealed` - (For signing) The sealed (encrypted) signing request
+        -   `nonce` - (For signing) The nonce used for sealing the request
+        -   `chain` - The chain ID
         -   `requestKey` - The public key for the request
         -   `buoyChannel` - The buoy channel ID for messaging
         -   `accountName` - (Only for signing) The account name
@@ -82,6 +84,8 @@ For login:
     }
 }
 ```
+
+**Note**: The web authenticator should return `type: 'wharf:login:response'` for login requests, not `type: 'sign_response'`.
 
 For signing:
 
