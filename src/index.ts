@@ -89,13 +89,12 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     ): Promise<{payload: CallbackPayload}> {
         return new Promise((resolve, reject) => {
             try {
-                console.log('UI', ui)
                 // Show status message using WharfKit UI
                 ui?.status('Opening authenticator popup...')
 
                 let popup: Window | null = null
 
-                popup = window.open(url, 'Web Authenticator', 'width=400,height=800')
+                popup = window.open(url, 'Web Authenticator', 'width=450,height=750')
 
                 if (!popup) {
                     throw new Error('Popup blocked - please enable popups for this site')
@@ -199,7 +198,9 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 context.ui
             )
 
-            this.data.privateKey = privateKey
+            console.log('payload', payload)
+
+            this.data.privateKey = String(privateKey)
             this.data.publicKey = payload.link_key
 
             if (!payload.cid) {
