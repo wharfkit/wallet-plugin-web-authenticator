@@ -2,9 +2,11 @@ import {
     createIdentityRequest,
     extractSignaturesFromCallback,
     isCallback,
+    LinkInfo,
     setTransactionCallback,
+    waitForCallback,
 } from '@wharfkit/protocol-esr'
-import {receive} from '@greymass/buoy'
+import {ReceiveOptions} from '@greymass/buoy'
 import {
     AbstractWalletPlugin,
     CallbackPayload,
@@ -77,11 +79,12 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
      */
     private async openPopup(
         url: string,
-        channelId: string,
+        receiveOptions: ReceiveOptions,
         ui?: UserInterface
     ): Promise<{payload: CallbackPayload}> {
         return new Promise((resolve, reject) => {
             try {
+                console.log('UI', ui)
                 // Show status message using WharfKit UI
                 ui?.status('Opening authenticator popup...')
 
@@ -108,19 +111,14 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                     }
                 }, 1000)
 
-                receive({
-                    service: this.buoyServiceUrl,
-                    channel: channelId,
-                    timeout: 300000, // 5 minutes timeout
-                    json: true,
-                })
+                waitForCallback(receiveOptions, this.buoyServiceUrl, 30000)
                     .then((response) => {
                         clearInterval(checkClosed)
                         popup?.close()
                         ui?.status('Transaction approved successfully')
                         // Reset the prompt count on successful completion
                         WalletPluginWebAuthenticator.promptCount = 0
-                        resolve(JSON.parse(response))
+                        resolve({payload: response})
                     })
                     .catch((error) => {
                         clearInterval(checkClosed)
@@ -130,14 +128,9 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             } catch (error) {
                 // Show prompt only once, then just show the error
                 if (WalletPluginWebAuthenticator.promptCount === 0) {
-                    this.showManualPopupPrompt(
-                        url,
-                        channelId,
-                        resolve,
-                        reject,
-                        ui,
-                        error instanceof Error ? error : new Error(String(error))
-                    )
+                    WalletPluginWebAuthenticator.promptCount++
+
+                    this.showManualPopupPrompt(url, receiveOptions, ui)
                 } else {
                     // Just show the error directly after the first prompt
                     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -156,52 +149,24 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
      */
     private showManualPopupPrompt(
         url: string,
-        channelId: string,
-        resolve: (value: {payload: CallbackPayload}) => void,
-        reject: (reason: Error) => void,
-        ui?: UserInterface,
-        error?: Error
+        receiveOptions: ReceiveOptions,
+        ui?: UserInterface
     ): void {
-        const errorMessage = error?.message || 'Unknown error occurred'
-        ui?.status(`Error: ${errorMessage}`)
-
-        // Increment the prompt count
-        WalletPluginWebAuthenticator.promptCount++
-
-        // Use WharfKit's prompt to show fallback options
-        const promptPromise = ui?.prompt({
-            title: 'Open Popup',
+        ui?.prompt({
+            title: 'Popup blocked',
             body: `The popup was blocked. Please open it manually.`,
             elements: [
                 {
                     type: 'button',
-                    label: 'Open Popup',
-                    data: 'open',
+                    label: 'Trigger Popup',
+                    data: {
+                        onClick: () => {
+                            this.openPopup(url, receiveOptions, ui)
+                        },
+                    },
                 },
             ],
         })
-
-        // Handle the prompt response
-        promptPromise
-            ?.then((response) => {
-                // Check the response data to determine which button was clicked
-                if (response && typeof response === 'object' && 'data' in response) {
-                    const data = (response as any).data
-                    if (data === 'open') {
-                        // Recursively call this.openPopup
-                        this.openPopup(url, channelId, ui).then(resolve).catch(reject)
-                    }
-                }
-            })
-            .catch((promptError) => {
-                reject(promptError)
-            })
-
-        // Auto-timeout after 30 seconds if no user interaction
-        setTimeout(() => {
-            promptPromise?.cancel('Popup timeout - no user interaction')
-            reject(new Error('Popup timeout - no user interaction'))
-        }, 30000)
     }
 
     /**
@@ -209,25 +174,27 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
      */
     async login(context: LoginContext): Promise<WalletPluginLoginResponse> {
         try {
-            // Generate a new request key pair for this login attempt
-            this.data.privateKey = PrivateKey.generate('K1')
-            const requestPublicKey = this.data.privateKey.toPublic()
-
             context.appName = context.appName || 'Unknown App'
 
             // Create the identity request to be presented to the user
-            const {request} = await createIdentityRequest(context, '')
+            const {
+                callback: receiveOptions,
+                request,
+                requestKey,
+                privateKey,
+            } = await createIdentityRequest(context, this.buoyServiceUrl)
 
             const loginUrl = `${this.webAuthenticatorUrl}/sign?esr=${request.encode()}&chain=${
                 context.chain?.id
-            }&requestKey=${requestPublicKey}`
+            }&requestKey=${requestKey}`
 
             const {payload}: {payload: CallbackPayload} = await this.openPopup(
                 loginUrl,
-                String(requestPublicKey),
+                receiveOptions,
                 context.ui
             )
 
+            this.data.privateKey = privateKey
             this.data.publicKey = payload.link_key
 
             if (!payload.cid) {
@@ -277,8 +244,21 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 throw new Error('No request keys available - please login first')
             }
 
-            resolved.request.setBroadcast(false)
-            setTransactionCallback(resolved.request, '')
+            const expiration = resolved.transaction.expiration.toDate()
+
+            // Create a new signing request based on the existing resolved request
+            const modifiedRequest = await context.createRequest({transaction: resolved.transaction})
+
+            // Set the expiration on the request LinkInfo
+            modifiedRequest.setInfoKey(
+                'link',
+                LinkInfo.from({
+                    expiration,
+                })
+            )
+
+            // Add the callback to the request
+            const callback = setTransactionCallback(modifiedRequest, this.buoyServiceUrl)
 
             // Seal the request using the shared secret
             const nonce = UInt64.from(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER))
@@ -298,11 +278,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 context.appName
             }&requestKey=${String(PrivateKey.from(this.data.privateKey).toPublic())}`
 
-            const response = await this.openPopup(
-                signUrl,
-                String(this.data.privateKey.toPublic()),
-                context.ui
-            )
+            const response = await this.openPopup(signUrl, callback, context.ui)
 
             const signatures = extractSignaturesFromCallback(response.payload)
             const wasSuccessful = isCallback(response.payload) && signatures.length > 0
