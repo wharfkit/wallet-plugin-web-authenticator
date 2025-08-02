@@ -133,8 +133,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                         json: true,
                     })
 
-                    console.log('buoy receive response', response)
-
                     // Clean up
                     clearInterval(checkClosed)
                     popup.close()
@@ -174,21 +172,33 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 requestPublicKey.toString()
             )
 
-            console.log('response', response)
-
             // Handle different response structures
             let payload: CallbackPayload
-            if (response && response.payload) {
+
+            // Handle case where response might be a string
+            let parsedResponse = response
+            if (typeof response === 'string') {
+                try {
+                    parsedResponse = JSON.parse(response)
+                } catch (error) {
+                    throw new Error(`Login failed: Invalid JSON response. Received: ${response}`)
+                }
+            }
+
+            if (parsedResponse && parsedResponse.payload) {
                 // Expected structure: { payload: { ... } }
-                payload = response.payload
+                payload = parsedResponse.payload
             } else {
                 throw new Error(
                     `Login failed: Invalid response structure. Received: ${JSON.stringify(
-                        response
+                        parsedResponse
                     )}`
                 )
             }
 
+            // For login, we need link_key, cid, sa, and sp
+            // The web authenticator might return a sign_response format for login
+            // but as long as it has the required fields, we can use it
             if (!payload.link_key) {
                 throw new Error(
                     `Login failed: No link_key in response. Payload: ${JSON.stringify(payload)}`
@@ -281,16 +291,27 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
 
             // Handle different response structures
             let payload: any
-            if (response && response.payload) {
+
+            // Handle case where response might be a string
+            let parsedResponse = response
+            if (typeof response === 'string') {
+                try {
+                    parsedResponse = JSON.parse(response)
+                } catch (error) {
+                    throw new Error(`Signing failed: Invalid JSON response. Received: ${response}`)
+                }
+            }
+
+            if (parsedResponse && parsedResponse.payload) {
                 // Expected structure: { payload: { ... } }
-                payload = response.payload
-            } else if (response && (response.sig || response.signatures)) {
+                payload = parsedResponse.payload
+            } else if (parsedResponse && (parsedResponse.sig || parsedResponse.signatures)) {
                 // Direct payload structure: { sig: "...", ... }
-                payload = response
+                payload = parsedResponse
             } else {
                 throw new Error(
                     `Signing failed: Invalid response structure. Received: ${JSON.stringify(
-                        response
+                        parsedResponse
                     )}`
                 )
             }
