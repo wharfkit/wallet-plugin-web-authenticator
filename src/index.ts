@@ -95,11 +95,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
 
                 let popup: Window | null = null
 
-                popup = window.open(
-                    url,
-                    'Web Authenticator',
-                    'width=400,height=700,scrollbars=yes,resizable=yes'
-                )
+                popup = window.open(url, 'Web Authenticator', 'width=400,height=800')
 
                 if (!popup) {
                     throw new Error('Popup blocked - please enable popups for this site')
