@@ -24,23 +24,28 @@ import {
 } from '@wharfkit/session'
 import {PrivateKey, PublicKey, UInt64} from '@wharfkit/antelope'
 import {sealMessage} from '@wharfkit/sealed-messages'
+import WebSocket from 'isomorphic-ws'
 
 interface WebAuthenticatorOptions {
     /** The URL of the web authenticator service */
     webAuthenticatorUrl?: string
     /** The buoy service URL for messaging */
     buoyServiceUrl?: string
+    /** The buoy WebSocket for messaging */
+    buoyWs?: WebSocket
 }
 
 export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implements WalletPlugin {
     private webAuthenticatorUrl: string
     private buoyServiceUrl: string
+    private buoyWs?: WebSocket
     private static promptCount: number = 0
 
     constructor(options: WebAuthenticatorOptions = {}) {
         super()
         this.webAuthenticatorUrl = options.webAuthenticatorUrl || 'http://localhost:5174'
         this.buoyServiceUrl = options.buoyServiceUrl || 'https://cb.anchor.link'
+        this.buoyWs = options?.buoyWs
     }
 
     /**
@@ -93,7 +98,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 popup = window.open(
                     url,
                     'Web Authenticator',
-                    'width=500,height=700,scrollbars=yes,resizable=yes'
+                    'width=400,height=700,scrollbars=yes,resizable=yes'
                 )
 
                 if (!popup) {
@@ -101,7 +106,11 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 }
 
                 // Update status
-                ui?.status('Please approve the transaction in the popup that just opened')
+                ui?.prompt({
+                    title: 'Approve',
+                    body: 'Please approve the transaction in the popup that just opened',
+                    elements: [],
+                })
 
                 const checkClosed = setInterval(() => {
                     if (popup?.closed) {
@@ -111,7 +120,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                     }
                 }, 1000)
 
-                waitForCallback(receiveOptions, this.buoyServiceUrl, 30000)
+                waitForCallback(receiveOptions, this.buoyWs, 30000)
                     .then((response) => {
                         clearInterval(checkClosed)
                         popup?.close()
