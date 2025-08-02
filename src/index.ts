@@ -36,7 +36,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     constructor(options: WebAuthenticatorOptions = {}) {
         super()
         this.webAuthenticatorUrl = options.webAuthenticatorUrl || 'http://localhost:5174'
-        this.buoyServiceUrl = options.buoyServiceUrl || 'http://localhost:5174'
+        this.buoyServiceUrl = options.buoyServiceUrl || 'https://cb.anchor.link'
     }
 
     /**
@@ -73,8 +73,8 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     /**
      * Opens a popup window with the given URL and waits for it to complete
      */
-    private async openPopup(url: string, channelId: string): Promise<any> {
-        return new Promise(async (resolve, reject) => {
+    private async openPopup(url: string, channelId: string): Promise<{payload: CallbackPayload}> {
+        return new Promise((resolve, reject) => {
             const popup = window.open(url, 'Web Authenticator', 'width=400,height=600')
 
             if (!popup) {
@@ -96,7 +96,9 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 json: true,
             })
                 .then((response) => {
-                    resolve(response)
+                    clearInterval(checkClosed)
+                    popup.close()
+                    resolve(JSON.parse(response))
                 })
                 .catch((error) => {
                     reject(error)
@@ -122,10 +124,14 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 context.chain?.id
             }&requestKey=${requestPublicKey}`
 
+            console.log('loginUrl', loginUrl)
+
             const {payload}: {payload: CallbackPayload} = await this.openPopup(
                 loginUrl,
                 String(requestPublicKey)
             )
+
+            console.log('payload', payload)
 
             this.data.publicKey = payload.link_key
 
@@ -197,7 +203,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 context.appName
             }&requestKey=${String(PrivateKey.from(this.data.privateKey).toPublic())}`
 
-            const response = await this.openPopup(signUrl, String(this.data.publicKey))
+            const response = await this.openPopup(signUrl, String(this.data.privateKey.toPublic()))
 
             const wasSuccessful =
                 isCallback(response.payload) &&
