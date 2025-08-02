@@ -4,6 +4,7 @@ import {
     isCallback,
     setTransactionCallback,
 } from '@wharfkit/protocol-esr'
+import {receive} from '@greymass/buoy'
 import {
     AbstractWalletPlugin,
     CallbackPayload,
@@ -18,8 +19,7 @@ import {
     WalletPluginMetadata,
     WalletPluginSignResponse,
 } from '@wharfkit/session'
-import {receive} from '@greymass/buoy'
-import {PrivateKey, PublicKey, Signature, UInt64} from '@wharfkit/antelope'
+import {PrivateKey, PublicKey, UInt64} from '@wharfkit/antelope'
 import {sealMessage} from '@wharfkit/sealed-messages'
 
 interface WebAuthenticatorOptions {
@@ -36,7 +36,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     constructor(options: WebAuthenticatorOptions = {}) {
         super()
         this.webAuthenticatorUrl = options.webAuthenticatorUrl || 'http://localhost:5174'
-        this.buoyServiceUrl = options.buoyServiceUrl || 'https://cb.anchor.link'
+        this.buoyServiceUrl = options.buoyServiceUrl || 'http://localhost:5174'
     }
 
     /**
@@ -71,78 +71,36 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     }
 
     /**
-     * Opens a popup window with the given URL and waits for it to complete using buoy messaging
+     * Opens a popup window with the given URL and waits for it to complete
      */
-    private async openPopup(
-        url: string,
-        type: 'sign' | 'identity' = 'sign',
-        context?: LoginContext | TransactContext,
-        requestKey?: string
-    ): Promise<any> {
-        return new Promise((resolve, reject) => {
-            // Use the request key as the channel ID for consistency
-            const channelId =
-                requestKey ||
-                `wharf-web-auth-${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-
-            // Add the buoy channel to the URL
-            const urlWithChannel = `${url}${url.includes('?') ? '&' : '?'}buoyChannel=${channelId}`
-
-            const popup = window.open(urlWithChannel, 'Web Authenticator', 'width=400,height=600')
+    private async openPopup(url: string, channelId: string): Promise<any> {
+        return new Promise(async (resolve, reject) => {
+            const popup = window.open(url, 'Web Authenticator', 'width=400,height=600')
 
             if (!popup) {
-                // Popup failed to open - provide retry option
-                if (context?.ui) {
-                    // Store the retry function in the context so UI can call it
-                    ;(context as any).retryPopup = () => {
-                        return this.openPopup(url, type, context)
-                    }
-
-                    // Show status message indicating user should click the button
-                    const actionType = type === 'sign' ? 'transaction signing' : 'authentication'
-                    context.ui.status(`Click the "Open Wallet" button to complete ${actionType}`)
-                }
-
-                reject(new Error('Popup failed to open'))
+                reject(new Error('Popup blocked - please enable popups for this site'))
                 return
-            }
-
-            // Show status message when popup is opened
-            if (context?.ui) {
-                const actionType = type === 'sign' ? 'transaction signing' : 'authentication'
-                context.ui.status(`Please complete ${actionType} in the popup window`)
             }
 
             const checkClosed = setInterval(() => {
                 if (popup.closed) {
                     clearInterval(checkClosed)
-                    const cancelMessage =
-                        type === 'sign' ? 'Transaction cancelled' : 'Authentication cancelled'
-                    reject(new Error(cancelMessage))
+                    reject(new Error('Transaction cancelled'))
                 }
             }, 1000)
 
-            // Use an async IIFE to handle the buoy receive
-            ;(async () => {
-                try {
-                    // Wait for response using buoy
-                    const response = await receive({
-                        service: this.buoyServiceUrl,
-                        channel: channelId,
-                        timeout: 300000, // 5 minutes timeout
-                        json: true,
-                    })
-
-                    // Clean up
-                    clearInterval(checkClosed)
-                    popup.close()
+            receive({
+                service: this.buoyServiceUrl,
+                channel: channelId,
+                timeout: 300000, // 5 minutes timeout
+                json: true,
+            })
+                .then((response) => {
                     resolve(response)
-                } catch (error) {
-                    clearInterval(checkClosed)
-                    popup.close()
+                })
+                .catch((error) => {
                     reject(error)
-                }
-            })()
+                })
         })
     }
 
@@ -160,50 +118,14 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             // Create the identity request to be presented to the user
             const {request} = await createIdentityRequest(context, '')
 
-            // Don't seal the identity request - the web authenticator doesn't have the request key yet
-            const loginUrl = `${this.webAuthenticatorUrl}/sign?type=login&esr=${request
-                .encode()
-                .toString()}&chain=${context.chain?.id}&requestKey=${requestPublicKey.toString()}`
+            const loginUrl = `${this.webAuthenticatorUrl}/sign?esr=${request.encode()}&chain=${
+                context.chain?.id
+            }&requestKey=${requestPublicKey}`
 
-            const response = await this.openPopup(
+            const {payload}: {payload: CallbackPayload} = await this.openPopup(
                 loginUrl,
-                'identity',
-                context,
-                requestPublicKey.toString()
+                String(requestPublicKey)
             )
-
-            // Handle different response structures
-            let payload: CallbackPayload
-
-            // Handle case where response might be a string
-            let parsedResponse = response
-            if (typeof response === 'string') {
-                try {
-                    parsedResponse = JSON.parse(response)
-                } catch (error) {
-                    throw new Error(`Login failed: Invalid JSON response. Received: ${response}`)
-                }
-            }
-
-            if (parsedResponse && parsedResponse.payload) {
-                // Expected structure: { payload: { ... } }
-                payload = parsedResponse.payload
-            } else {
-                throw new Error(
-                    `Login failed: Invalid response structure. Received: ${JSON.stringify(
-                        parsedResponse
-                    )}`
-                )
-            }
-
-            // For login, we need link_key, cid, sa, and sp
-            // The web authenticator might return a sign_response format for login
-            // but as long as it has the required fields, we can use it
-            if (!payload.link_key) {
-                throw new Error(
-                    `Login failed: No link_key in response. Payload: ${JSON.stringify(payload)}`
-                )
-            }
 
             this.data.publicKey = payload.link_key
 
@@ -235,11 +157,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             return loginResponse
         } catch (error: unknown) {
             if (error instanceof Error) {
-                // Check if this is a popup failed to open error
-                if (error.message.includes('Popup failed to open')) {
-                    // The UI has already been notified in openPopup
-                    throw error
-                }
                 throw new Error(`Login failed: ${error.message}`)
             }
             throw new Error('Login failed: Unknown error')
@@ -272,82 +189,37 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 nonce
             )
 
-            const signUrl = `${
-                this.webAuthenticatorUrl
-            }/sign?type=sign&sealed=${sealedRequest.toString(
+            const signUrl = `${this.webAuthenticatorUrl}/sign?sealed=${sealedRequest.toString(
                 'hex'
-            )}&nonce=${nonce.toString()}&chain=${context.chain?.id}&accountName=${
+            )}&nonce=${nonce.toString()}&chain=${context.chain?.name}&accountName=${
                 context.accountName
             }&permissionName=${context.permissionName}&appName=${
                 context.appName
-            }&requestKey=${this.data.publicKey.toString()}`
+            }&requestKey=${String(PrivateKey.from(this.data.privateKey).toPublic())}`
 
-            const response = await this.openPopup(
-                signUrl,
-                'sign',
-                context,
-                this.data.publicKey.toString()
-            )
+            const response = await this.openPopup(signUrl, String(this.data.publicKey))
 
-            // Handle different response structures
-            let payload: any
-
-            // Handle case where response might be a string
-            let parsedResponse = response
-            if (typeof response === 'string') {
-                try {
-                    parsedResponse = JSON.parse(response)
-                } catch (error) {
-                    throw new Error(`Signing failed: Invalid JSON response. Received: ${response}`)
-                }
-            }
-
-            if (parsedResponse && parsedResponse.payload) {
-                // Expected structure: { payload: { ... } }
-                payload = parsedResponse.payload
-            } else if (parsedResponse && (parsedResponse.sig || parsedResponse.signatures)) {
-                // Direct payload structure: { sig: "...", ... }
-                payload = parsedResponse
-            } else {
-                throw new Error(
-                    `Signing failed: Invalid response structure. Received: ${JSON.stringify(
-                        parsedResponse
-                    )}`
-                )
-            }
-
-            let extractedSignatures: Signature[] = []
-            try {
-                extractedSignatures = extractSignaturesFromCallback(payload)
-            } catch (error) {
-                // If extraction fails, try to get signatures from the payload directly
-                if (payload.sig) {
-                    extractedSignatures = [Signature.from(payload.sig)]
-                } else if (payload.signatures) {
-                    extractedSignatures = payload.signatures.map((sig: string) =>
-                        Signature.from(sig)
-                    )
-                }
-            }
-
-            const wasSuccessful = isCallback(payload) && extractedSignatures.length > 0
+            const wasSuccessful =
+                isCallback(response.payload) &&
+                extractSignaturesFromCallback(response.payload).length > 0
 
             if (wasSuccessful) {
-                // Return the signatures from the wallet
+                // If the callback was resolved, create a new request from the response
+                const resolvedRequest = await ResolvedSigningRequest.fromPayload(
+                    response.payload,
+                    context.esrOptions
+                )
+
+                // Return the new request and the signatures from the wallet
                 return {
-                    signatures: extractedSignatures,
-                    resolved: resolved, // Use the original resolved request instead of creating a new one
+                    signatures: extractSignaturesFromCallback(response.payload),
+                    resolved: resolvedRequest,
                 }
             } else {
                 throw new Error('Signing failed: No signatures returned')
             }
         } catch (error: unknown) {
             if (error instanceof Error) {
-                // Check if this is a popup failed to open error
-                if (error.message.includes('Popup failed to open')) {
-                    // The UI has already been notified in openPopup
-                    throw error
-                }
                 throw new Error(`Signing failed: ${error.message}`)
             }
             throw new Error('Signing failed: Unknown error')
