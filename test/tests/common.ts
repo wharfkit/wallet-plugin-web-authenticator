@@ -35,6 +35,36 @@ import {
     transferAbi,
 } from './mocks'
 
+// Mock the waitForCallback function by overriding the module
+const originalWaitForCallback = require('@wharfkit/protocol-esr').waitForCallback
+const originalCreateIdentityRequest = require('@wharfkit/protocol-esr').createIdentityRequest
+const originalExtractSignaturesFromCallback =
+    require('@wharfkit/protocol-esr').extractSignaturesFromCallback
+const originalIsCallback = require('@wharfkit/protocol-esr').isCallback
+const originalSetTransactionCallback = require('@wharfkit/protocol-esr').setTransactionCallback
+
+// Mock responses
+const mockLoginResponse = {
+    cid: '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d',
+    sa: 'wharfkit1131',
+    sp: 'test',
+    link_key: 'PUB_K1_6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5BoDq63',
+    sig: 'SIG_K1_KBub1qmdiPpWA2XKKEZEG3PLZPMP3FnYJuH4gYrKzAQKdxYnJjFMpVWdxEwmFFodgGaNnAMbR4kaFkuXBtJnZLCYWWJdqp',
+}
+
+const mockSignResponse = {
+    tx: '01234567890123456789',
+    sig: 'SIG_K1_mock_signature_for_testing',
+    sa: 'wharfkit1131',
+    sp: 'test',
+    rbn: '1234',
+    rid: '5678',
+    ex: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    req: 'mock-request-encoded',
+    cid: '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d',
+    callback: 'https://example.com/callback',
+}
+
 suite('wallet plugin', function () {
     // Common setup
     const chainId = '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d'
@@ -103,7 +133,6 @@ suite('wallet plugin', function () {
     // Mock window setup
     let originalWindow: any
     let mockPopup: any
-    let messageHandler: ((event: MessageEvent) => void) | undefined
 
     setup(function () {
         // Store original window
@@ -120,21 +149,37 @@ suite('wallet plugin', function () {
         // Mock window methods and properties
         const windowSpy = {
             open: () => mockPopup,
-            addEventListener: (event: string, handler: any) => {
-                if (event === 'message') {
-                    messageHandler = handler
-                }
-            },
+            addEventListener: () => {},
             removeEventListener: () => {},
         }
 
         // Apply mocks to window object
         Object.assign(global.window, windowSpy)
+
+        // Mock the protocol-esr functions
+        const protocolEsr = require('@wharfkit/protocol-esr')
+        protocolEsr.waitForCallback = async () => mockLoginResponse
+        protocolEsr.createIdentityRequest = async () => ({
+            callback: {id: 'mock-callback-id'},
+            request: {encode: () => 'mock-request'},
+            requestKey: 'mock-request-key',
+            privateKey: 'mock-private-key',
+        })
+        protocolEsr.extractSignaturesFromCallback = () => [mockSignature]
+        protocolEsr.isCallback = () => true
+        protocolEsr.setTransactionCallback = () => ({id: 'mock-transaction-callback'})
     })
 
     teardown(function () {
         global.window = originalWindow
-        messageHandler = undefined
+
+        // Restore original functions
+        const protocolEsr = require('@wharfkit/protocol-esr')
+        protocolEsr.waitForCallback = originalWaitForCallback
+        protocolEsr.createIdentityRequest = originalCreateIdentityRequest
+        protocolEsr.extractSignaturesFromCallback = originalExtractSignaturesFromCallback
+        protocolEsr.isCallback = originalIsCallback
+        protocolEsr.setTransactionCallback = originalSetTransactionCallback
     })
 
     test('login functionality', async function () {
@@ -158,34 +203,8 @@ suite('wallet plugin', function () {
             esrOptions: {},
         } as unknown as LoginContext
 
-        // Start the login process
-        const loginPromise = plugin.login(loginContext)
-
-        // Simulate the popup response
-        setTimeout(() => {
-            if (messageHandler) {
-                messageHandler(
-                    new MessageEvent('message', {
-                        origin: 'https://web-authenticator.greymass.com',
-                        data: {
-                            type: 'identity',
-                            payload: {
-                                cid: chainId,
-                                sa: 'wharfkit1131',
-                                sp: 'test',
-                                requestKey:
-                                    'PUB_K1_6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5BoDq63',
-                                // Include identity signature for verification using ESR standard field name
-                                sig: 'SIG_K1_KBub1qmdiPpWA2XKKEZEG3PLZPMP3FnYJuH4gYrKzAQKdxYnJjFMpVWdxEwmFFodgGaNnAMbR4kaFkuXBtJnZLCYWWJdqp',
-                            },
-                        },
-                    })
-                )
-            }
-        }, 100)
-
         // Test login functionality
-        const loginResponse = await loginPromise
+        const loginResponse = await plugin.login(loginContext)
 
         // Verify login response
         assert.equal(loginResponse.chain.toString(), chainId)
@@ -202,7 +221,10 @@ suite('wallet plugin', function () {
             (loginResponse as any).identityProof.signedRequest,
             'Identity proof signed request should be included'
         )
-        assert.equal((loginResponse as any).identityProof.signature, String(mockSignature))
+        assert.equal(
+            (loginResponse as any).identityProof.signature,
+            'SIG_K1_KBub1qmdiPpWA2XKKEZEG3PLZPMP3FnYJuH4gYrKzAQKdxYnJjFMpVWdxEwmFFodgGaNnAMbR4kaFkuXBtJnZLCYWWJdqp'
+        )
     })
 
     test('sign functionality', async function () {
@@ -218,8 +240,8 @@ suite('wallet plugin', function () {
 
         const mockResolvedSigningRequest = await makeMockResolvedSigningRequest()
 
-        // Start the sign process
-        const signPromise = plugin.sign(mockResolvedSigningRequest, {
+        // Test sign functionality
+        const signResponse = await plugin.sign(mockResolvedSigningRequest, {
             chain: Chains.Jungle4,
             ui: mockUI,
             fetch: global.fetch,
@@ -229,6 +251,10 @@ suite('wallet plugin', function () {
             uiRequirements: {},
             addHook: () => {},
             getClient: () => new APIClient({url: chain.url}),
+            createRequest: async ({transaction}) => ({
+                setInfoKey: () => {},
+                encode: () => 'mock-encoded-request',
+            }),
             esrOptions: {
                 abiProvider: {
                     getAbi: async (account) => {
@@ -240,9 +266,6 @@ suite('wallet plugin', function () {
                 },
             },
         } as unknown as TransactContext)
-
-        // Test sign functionality
-        const signResponse = await signPromise
 
         // Verify sign response
         assert.isTrue(signResponse.signatures.length === 1)
@@ -271,11 +294,8 @@ suite('wallet plugin', function () {
             esrOptions: {},
         } as unknown as LoginContext
 
-        // Start the login process
-        const loginPromise = plugin.login(loginContext)
-
         // Test login functionality
-        const loginResponse = await loginPromise
+        const loginResponse = await plugin.login(loginContext)
 
         // Verify login response
         assert.equal(loginResponse.chain.toString(), chainId)

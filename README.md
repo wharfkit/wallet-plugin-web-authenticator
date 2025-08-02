@@ -11,9 +11,6 @@ A wallet plugin for Wharf that allows signing transactions using a web-based aut
 -   Support for transaction signing
 -   Currently only supports Jungle 4 testnet
 -   Configurable web authenticator URL
--   **Enhanced UI feedback** with status messages
--   **Manual popup trigger** when popups are blocked
--   **Error handling** for popup failures
 
 ## Installation
 
@@ -39,45 +36,6 @@ const sessionKit = new SessionKit({
     walletPlugins: [webAuthenticator]
 })
 ```
-
-## UI Integration
-
-The plugin provides enhanced UI feedback through WharfKit's UserInterface:
-
-### Status Messages
-
--   "Opening authenticator popup..."
--   "Please approve the transaction in the popup that just opened"
--   "Transaction approved successfully"
--   "Transaction cancelled"
--   "Transaction failed"
--   "Popup blocked - please enable popups for this site"
-
-### Error Handling & Retry
-
-The plugin includes comprehensive error handling with automatic retry options:
-
--   **Automatic Error Detection** - Any error in the popup process triggers a UI prompt
--   **Single Prompt Limit** - The UI prompt is only shown once per operation to avoid spam
--   **Static Counter** - Uses a static counter that resets to 0 when the operation completes successfully
--   **Recursive Retry** - The retry button calls `this.openPopup()` recursively
--   **Timeout Protection** - 30-second timeout for user interaction
--   **Clear Error Messages** - Descriptive error messages for different failure types
-
-### UI Integration
-
-The plugin uses WharfKit's built-in UI prompt system for error handling:
-
-```typescript
-// When any error occurs, the plugin automatically shows:
-ui?.prompt({
-    title: 'Open Popup',
-    body: 'The popup was blocked. Please open it manually.',
-    elements: [{type: 'button', label: 'Open Popup', data: 'open'}],
-})
-```
-
-The retry button recursively calls `this.openPopup()`. The static counter ensures the prompt is only shown once per operation and resets when the operation completes successfully.
 
 ## Configuration
 
@@ -108,10 +66,9 @@ For login:
 {
     payload: {
         cid: string // Chain ID
-        sa: string // Account name
-        sp: string // Permission name
-        link_key: string // Public key
-        sig: string // Signature
+        sa: string // Signing account
+        sp: string // Signing permission
+        sig?: string // Optional: Signature proving ownership of the account for third-party verification
     }
 }
 ```
@@ -120,18 +77,7 @@ For signing:
 
 ```typescript
 {
-    payload: {
-        tx: string // Transaction ID
-        sig: string // Signature
-        sa: string // Account name
-        sp: string // Permission name
-        rbn: string // Reference block number
-        rid: string // Reference block ID
-        ex: string // Expiration
-        req: string // Request
-        cid: string // Chain ID
-        callback: string // Callback URL
-    }
+    signatures: string[]  // Array of signatures
 }
 ```
 

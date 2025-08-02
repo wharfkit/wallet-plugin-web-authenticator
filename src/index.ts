@@ -15,12 +15,12 @@ import {
     PermissionLevel,
     ResolvedSigningRequest,
     TransactContext,
+    UserInterface,
     WalletPlugin,
     WalletPluginConfig,
     WalletPluginLoginResponse,
     WalletPluginMetadata,
     WalletPluginSignResponse,
-    UserInterface,
 } from '@wharfkit/session'
 import {PrivateKey, PublicKey, UInt64} from '@wharfkit/antelope'
 import {sealMessage} from '@wharfkit/sealed-messages'
@@ -39,7 +39,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     private webAuthenticatorUrl: string
     private buoyServiceUrl: string
     private buoyWs?: WebSocket
-    private static promptCount: number = 0
+    private static promptCount = 0
 
     constructor(options: WebAuthenticatorOptions = {}) {
         super()
@@ -198,8 +198,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 context.ui
             )
 
-            console.log('payload', payload)
-
             this.data.privateKey = String(privateKey)
             this.data.publicKey = payload.link_key
 
@@ -270,7 +268,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             const nonce = UInt64.from(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER))
 
             const sealedRequest = await sealMessage(
-                resolved.request.encode(),
+                modifiedRequest.encode(),
                 PrivateKey.from(this.data.privateKey),
                 PublicKey.from(this.data.publicKey),
                 nonce
