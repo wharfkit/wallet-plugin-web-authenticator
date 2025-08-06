@@ -1,5 +1,5 @@
 import {Chains, SessionKit} from '@wharfkit/session'
-import {PermissionLevel, Signature, APIClient} from '@wharfkit/antelope'
+import {PermissionLevel, Signature, APIClient, PrivateKey} from '@wharfkit/antelope'
 import {
     mockChainDefinition,
     mockPermissionLevel,
@@ -34,6 +34,36 @@ import {
     mockSignature,
     transferAbi,
 } from './mocks'
+
+// Mock the waitForCallback function by overriding the module
+const originalWaitForCallback = require('@wharfkit/protocol-esr').waitForCallback
+const originalCreateIdentityRequest = require('@wharfkit/protocol-esr').createIdentityRequest
+const originalExtractSignaturesFromCallback =
+    require('@wharfkit/protocol-esr').extractSignaturesFromCallback
+const originalIsCallback = require('@wharfkit/protocol-esr').isCallback
+const originalSetTransactionCallback = require('@wharfkit/protocol-esr').setTransactionCallback
+
+// Mock responses
+const mockLoginResponse = {
+    cid: '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d',
+    sa: 'wharfkit1131',
+    sp: 'test',
+    link_key: 'PUB_K1_6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5BoDq63',
+    sig: 'SIG_K1_KBub1qmdiPpWA2XKKEZEG3PLZPMP3FnYJuH4gYrKzAQKdxYnJjFMpVWdxEwmFFodgGaNnAMbR4kaFkuXBtJnZLCYWWJdqp',
+}
+
+const mockSignResponse = {
+    tx: '01234567890123456789',
+    sig: 'SIG_K1_mock_signature_for_testing',
+    sa: 'wharfkit1131',
+    sp: 'test',
+    rbn: '1234',
+    rid: '5678',
+    ex: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    req: 'mock-request-encoded',
+    cid: '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d',
+    callback: 'https://example.com/callback',
+}
 
 suite('wallet plugin', function () {
     // Common setup
@@ -103,7 +133,6 @@ suite('wallet plugin', function () {
     // Mock window setup
     let originalWindow: any
     let mockPopup: any
-    let messageHandler: ((event: MessageEvent) => void) | undefined
 
     setup(function () {
         // Store original window
@@ -120,21 +149,37 @@ suite('wallet plugin', function () {
         // Mock window methods and properties
         const windowSpy = {
             open: () => mockPopup,
-            addEventListener: (event: string, handler: any) => {
-                if (event === 'message') {
-                    messageHandler = handler
-                }
-            },
+            addEventListener: () => {},
             removeEventListener: () => {},
         }
 
         // Apply mocks to window object
         Object.assign(global.window, windowSpy)
+
+        // Mock the protocol-esr functions
+        const protocolEsr = require('@wharfkit/protocol-esr')
+        protocolEsr.waitForCallback = async () => mockLoginResponse
+        protocolEsr.createIdentityRequest = async () => ({
+            callback: {id: 'mock-callback-id'},
+            request: {encode: () => 'mock-request'},
+            requestKey: 'mock-request-key',
+            privateKey: 'mock-private-key',
+        })
+        protocolEsr.extractSignaturesFromCallback = () => [mockSignature]
+        protocolEsr.isCallback = () => true
+        protocolEsr.setTransactionCallback = () => ({id: 'mock-transaction-callback'})
     })
 
     teardown(function () {
         global.window = originalWindow
-        messageHandler = undefined
+
+        // Restore original functions
+        const protocolEsr = require('@wharfkit/protocol-esr')
+        protocolEsr.waitForCallback = originalWaitForCallback
+        protocolEsr.createIdentityRequest = originalCreateIdentityRequest
+        protocolEsr.extractSignaturesFromCallback = originalExtractSignaturesFromCallback
+        protocolEsr.isCallback = originalIsCallback
+        protocolEsr.setTransactionCallback = originalSetTransactionCallback
     })
 
     test('login functionality', async function () {
@@ -158,34 +203,8 @@ suite('wallet plugin', function () {
             esrOptions: {},
         } as unknown as LoginContext
 
-        // Start the login process
-        const loginPromise = plugin.login(loginContext)
-
-        // Simulate the popup response
-        setTimeout(() => {
-            if (messageHandler) {
-                messageHandler(
-                    new MessageEvent('message', {
-                        origin: 'https://web-authenticator.greymass.com',
-                        data: {
-                            type: 'identity',
-                            payload: {
-                                cid: chainId,
-                                sa: 'wharfkit1131',
-                                sp: 'test',
-                                requestKey:
-                                    'PUB_K1_6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5BoDq63',
-                                // Include identity signature for verification using ESR standard field name
-                                sig: 'SIG_K1_KBub1qmdiPpWA2XKKEZEG3PLZPMP3FnYJuH4gYrKzAQKdxYnJjFMpVWdxEwmFFodgGaNnAMbR4kaFkuXBtJnZLCYWWJdqp',
-                            },
-                        },
-                    })
-                )
-            }
-        }, 100)
-
         // Test login functionality
-        const loginResponse = await loginPromise
+        const loginResponse = await plugin.login(loginContext)
 
         // Verify login response
         assert.equal(loginResponse.chain.toString(), chainId)
@@ -213,14 +232,29 @@ suite('wallet plugin', function () {
             webAuthenticatorUrl: 'https://web-authenticator.greymass.com',
         })
 
-        plugin.data.privateKey = mockPrivateKey
-        plugin.data.publicKey = mockPublicKey
+        // Use different keys for the sign test to avoid channel ID conflicts
+        const signPrivateKey = PrivateKey.generate('K1')
+        const signPublicKey = signPrivateKey.toPublic()
+        plugin.data.privateKey = signPrivateKey
+        plugin.data.publicKey = signPublicKey
 
         const mockResolvedSigningRequest = await makeMockResolvedSigningRequest()
 
-        // Start the sign process
-        const signPromise = plugin.sign(mockResolvedSigningRequest, {
+        // Test sign functionality
+        const signResponse = await plugin.sign(mockResolvedSigningRequest, {
             chain: Chains.Jungle4,
+            ui: mockUI,
+            fetch: global.fetch,
+            hooks: {},
+            walletPlugins: [],
+            arbitrary: {},
+            uiRequirements: {},
+            addHook: () => {},
+            getClient: () => new APIClient({url: chain.url}),
+            createRequest: async ({transaction}) => ({
+                setInfoKey: () => {},
+                encode: () => 'mock-encoded-request',
+            }),
             esrOptions: {
                 abiProvider: {
                     getAbi: async (account) => {
@@ -231,39 +265,41 @@ suite('wallet plugin', function () {
                     },
                 },
             },
-        } as TransactContext)
-
-        // Simulate the popup response
-        setTimeout(() => {
-            if (messageHandler) {
-                messageHandler(
-                    new MessageEvent('message', {
-                        origin: 'https://web-authenticator.greymass.com',
-                        data: {
-                            payload: {
-                                tx: '01234567890123456789', // Mock transaction ID
-                                sig: String(mockSignature),
-                                sig0: String(mockSignature),
-                                sa: 'test', // Signer authority
-                                sp: 'active', // Signer permission
-                                rbn: '1234', // Reference block num
-                                rid: '5678', // Reference block ID
-                                ex: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // Expiration
-                                req: mockResolvedSigningRequest.request.encode(), // Original request
-                                cid: String(Chains.Jungle4.id), // Chain ID
-                            },
-                        },
-                    })
-                )
-            }
-        }, 0)
-
-        // Test sign functionality
-        const signResponse = await signPromise
+        } as unknown as TransactContext)
 
         // Verify sign response
         assert.isTrue(signResponse.signatures.length === 1)
         assert.instanceOf(signResponse.signatures[0], Signature)
         assert.exists(signResponse.resolved)
+    })
+
+    test('popup success with UI feedback', async function () {
+        const plugin = new WalletPluginWebAuthenticator({
+            webAuthenticatorUrl: 'https://web-authenticator.greymass.com',
+        })
+
+        // Mock login context with UI
+        const loginContext = {
+            chain,
+            chains: [chain],
+            fetch: global.fetch,
+            hooks: {},
+            permissionLevel: PermissionLevel.from('wharfkit1131@test'),
+            ui: mockUI,
+            walletPlugins: [],
+            arbitrary: {},
+            uiRequirements: {},
+            addHook: () => {},
+            getClient: () => new APIClient({url: chain.url}),
+            esrOptions: {},
+        } as unknown as LoginContext
+
+        // Test login functionality
+        const loginResponse = await plugin.login(loginContext)
+
+        // Verify login response
+        assert.equal(loginResponse.chain.toString(), chainId)
+        assert.equal(loginResponse.permissionLevel.actor.toString(), 'wharfkit1131')
+        assert.equal(loginResponse.permissionLevel.permission.toString(), 'test')
     })
 })

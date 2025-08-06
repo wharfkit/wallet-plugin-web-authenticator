@@ -16,8 +16,10 @@
         "prepare": "make"
     },
     "dependencies": {
-        "@wharfkit/protocol-esr": "^1.3.2",
+        "@greymass/buoy": "^1.0.4",
+        "@wharfkit/protocol-esr": "^1.5.0",
         "@wharfkit/sealed-messages": "^1.0.0",
+        "isomorphic-ws": "^5.0.0",
         "tslib": "^2.1.0"
     },
     "resolutions": {
