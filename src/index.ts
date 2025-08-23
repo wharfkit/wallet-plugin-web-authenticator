@@ -35,6 +35,15 @@ interface WebAuthenticatorOptions {
     buoyWs?: WebSocket
 }
 
+const CANCELLED_STRING = 'Transaction cancelled by user'
+
+const translateFn = (key: string) => {
+    if (key === CANCELLED_STRING) {
+        return 'The signing request was cancelled.'
+    }
+    return key
+}
+
 export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implements WalletPlugin {
     private webAuthenticatorUrl: string
     private buoyServiceUrl: string
@@ -115,7 +124,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                     }
                 }, 1000)
 
-                waitForCallback(receiveOptions, this.buoyWs, 30000)
+                waitForCallback(receiveOptions, this.buoyWs, translateFn)
                     .then((response) => {
                         clearInterval(checkClosed)
                         popup?.close()
