@@ -39,7 +39,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     private webAuthenticatorUrl: string
     private buoyServiceUrl: string
     private buoyWs?: WebSocket
-    private static promptCount = 0
+    private manualPopupShown = false
 
     constructor(options: WebAuthenticatorOptions = {}) {
         super()
@@ -88,62 +88,45 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
         ui?: UserInterface
     ): Promise<{payload: CallbackPayload}> {
         return new Promise((resolve, reject) => {
-            try {
-                // Show status message using WharfKit UI
-                ui?.status('Opening authenticator popup...')
+            const t = ui?.getTranslate(this.id)
 
-                const t = ui?.getTranslate(this.id)
+            // Show status message using WharfKit UI
+            ui?.status('Opening authenticator popup...')
 
-                let popup: Window | null = null
+            const popup = window.open(url, 'Web Authenticator', 'width=450,height=750')
 
-                popup = window.open(url, 'Web Authenticator', 'width=450,height=750')
-
-                if (!popup) {
-                    throw new Error('Popup blocked - please enable popups for this site')
-                }
-
-                // Update status
-                const prompt = ui?.prompt({
-                    title: 'Approve',
-                    body: 'Please approve the transaction in the popup that just opened',
-                    elements: [],
-                })
-
-                waitForCallback(receiveOptions, this.buoyWs, t)
+            if (!popup) {
+                this.manualPopupShown = true
+                return this.showManualPopupPrompt(url, receiveOptions, ui)
                     .then((response) => {
-                        popup?.close()
-                        ui?.status('Transaction approved successfully')
-                        // Reset the prompt count on successful completion
-                        WalletPluginWebAuthenticator.promptCount = 0
-                        resolve({payload: response})
+                        resolve(response)
                     })
-                    .catch(() => {
-                        popup?.close()
-                        ui?.status('Transaction cancelled')
-                        reject(new Error('Transaction cancelled by user'))
+                    .catch((error) => {
+                        reject(error)
                     })
-            } catch (error) {
-                // Show prompt only once, then just show the error
-                if (WalletPluginWebAuthenticator.promptCount === 0) {
-                    WalletPluginWebAuthenticator.promptCount++
-
-                    this.showManualPopupPrompt(url, receiveOptions, ui)
-                        .then((response) => {
-                            resolve(response)
-                        })
-                        .catch((error) => {
-                            reject(error)
-                        })
-                } else {
-                    // Just show the error directly after the first prompt
-                    const errorMessage = error instanceof Error ? error.message : String(error)
-                    ui?.status(errorMessage)
-                    reject(error instanceof Error ? error : new Error(String(error)))
-                }
-            } finally {
-                // Reset the prompt count on successful completion
-                WalletPluginWebAuthenticator.promptCount = 0
             }
+
+            // Update status
+            ui?.prompt({
+                title: 'Approve',
+                body: 'Please approve the transaction in the popup that just opened',
+                elements: [],
+            })
+
+            waitForCallback(receiveOptions, this.buoyWs, t)
+                .then((response) => {
+                    popup?.close()
+                    ui?.status('Transaction approved successfully')
+                    resolve({payload: response})
+                })
+                .catch(() => {
+                    popup?.close()
+                    ui?.status('Transaction cancelled')
+                    reject(new Error('Transaction cancelled by user'))
+                })
+                .finally(() => {
+                    this.manualPopupShown = false
+                })
         })
     }
 
