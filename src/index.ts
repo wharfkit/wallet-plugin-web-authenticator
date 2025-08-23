@@ -113,6 +113,14 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 elements: [],
             })
 
+            const checkClosedInterval = setInterval(() => {
+                if (popup?.closed) {
+                    clearInterval(checkClosedInterval)
+                    ui?.status('Transaction cancelled')
+                    reject(new Error('Transaction cancelled by user'))
+                }
+            }, 1000)
+
             waitForCallback(receiveOptions, this.buoyWs, t)
                 .then((response) => {
                     popup?.close()
@@ -125,6 +133,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                     reject(new Error('Transaction cancelled by user'))
                 })
                 .finally(() => {
+                    clearInterval(checkClosedInterval)
                     this.manualPopupShown = false
                 })
         })
