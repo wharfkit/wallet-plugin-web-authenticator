@@ -99,6 +99,8 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 // Show status message using WharfKit UI
                 ui?.status('Opening authenticator popup...')
 
+                const t = ui?.getTranslate(this.id)
+
                 let popup: Window | null = null
 
                 popup = window.open(url, 'Web Authenticator', 'width=450,height=750')
@@ -122,7 +124,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                     }
                 }, 1000)
 
-                waitForCallback(receiveOptions, this.buoyWs, 30000)
+                waitForCallback(receiveOptions, this.buoyWs, t)
                     .then((response) => {
                         clearInterval(checkClosed)
                         popup?.close()
