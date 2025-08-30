@@ -26,6 +26,8 @@ import {PrivateKey, PublicKey, UInt64} from '@wharfkit/antelope'
 import {sealMessage} from '@wharfkit/sealed-messages'
 import WebSocket from 'isomorphic-ws'
 
+import defaultTranslations from './translations'
+
 interface WebAuthenticatorOptions {
     /** The URL of the web authenticator service */
     webAuthenticatorUrl?: string
@@ -78,6 +80,11 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     get id(): string {
         return 'web-authenticator'
     }
+
+    /**
+     * The translations for this plugin
+     */
+    translations = defaultTranslations
 
     /**
      * Opens a popup window with the given URL and waits for it to complete
