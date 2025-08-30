@@ -285,7 +285,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
 
             const signUrl = `${this.webAuthenticatorUrl}/sign?sealed=${sealedRequest.toString(
                 'hex'
-            )}&nonce=${nonce.toString()}&chain=${context.chain?.name}&accountName=${
+            )}&nonce=${nonce.toString()}&chain=${context.chain?.id}&accountName=${
                 context.accountName
             }&permissionName=${context.permissionName}&appName=${
                 context.appName
