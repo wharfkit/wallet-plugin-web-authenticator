@@ -26,6 +26,8 @@ import {PrivateKey, PublicKey, UInt64} from '@wharfkit/antelope'
 import {sealMessage} from '@wharfkit/sealed-messages'
 import WebSocket from 'isomorphic-ws'
 
+import defaultTranslations from './translations'
+
 interface WebAuthenticatorOptions {
     /** The URL of the web authenticator service */
     webAuthenticatorUrl?: string
@@ -80,6 +82,11 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     }
 
     /**
+     * The translations for this plugin
+     */
+    translations = defaultTranslations
+
+    /**
      * Opens a popup window with the given URL and waits for it to complete
      */
     private async openPopup(
@@ -91,6 +98,8 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             try {
                 // Show status message using WharfKit UI
                 ui?.status('Opening authenticator popup...')
+
+                const t = ui?.getTranslate(this.id)
 
                 let popup: Window | null = null
 
@@ -115,7 +124,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                     }
                 }, 1000)
 
-                waitForCallback(receiveOptions, this.buoyWs, 30000)
+                waitForCallback(receiveOptions, this.buoyWs, t)
                     .then((response) => {
                         clearInterval(checkClosed)
                         popup?.close()
@@ -276,7 +285,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
 
             const signUrl = `${this.webAuthenticatorUrl}/sign?sealed=${sealedRequest.toString(
                 'hex'
-            )}&nonce=${nonce.toString()}&chain=${context.chain?.name}&accountName=${
+            )}&nonce=${nonce.toString()}&chain=${context.chain?.id}&accountName=${
                 context.accountName
             }&permissionName=${context.permissionName}&appName=${
                 context.appName
