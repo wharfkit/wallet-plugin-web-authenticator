@@ -26,6 +26,8 @@ import {PrivateKey, PublicKey, UInt64} from '@wharfkit/antelope'
 import {sealMessage} from '@wharfkit/sealed-messages'
 import WebSocket from 'isomorphic-ws'
 
+import defaultTranslations from './translations'
+
 interface WebAuthenticatorOptions {
     /** The URL of the web authenticator service */
     webAuthenticatorUrl?: string
@@ -80,6 +82,11 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     }
 
     /**
+     * The translations for this plugin
+     */
+    translations = defaultTranslations
+
+    /**
      * Opens a popup window with the given URL and waits for it to complete
      */
     private async openPopup(
@@ -93,18 +100,34 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             // Show status message using WharfKit UI
             ui?.status('Opening authenticator popup...')
 
-            const popup = window.open(url, 'Web Authenticator', 'width=450,height=750')
+            let popup: Window | null = window.open(url, 'Web Authenticator', 'width=450,height=750')
 
             if (!popup) {
-                this.manualPopupShown = true
-                return this.showManualPopupPrompt(url, receiveOptions, ui)
-                    .then((response) => {
-                        resolve(response)
-                    })
-                    .catch((error) => {
-                        reject(error)
-                    })
+                throw new Error('Popup blocked - please enable popups for this site')
             }
+
+            // Update status
+            ui?.prompt({
+                title: 'Approve',
+                body: 'Please approve the transaction in the popup that just opened',
+                elements: [],
+            })
+
+            const checkClosed = setInterval(() => {
+                if (popup?.closed) {
+                    clearInterval(checkClosed)
+                    ui?.status('Transaction cancelled')
+                    reject(new Error('Transaction cancelled by user'))
+                }
+            }, 1000)
+
+            waitForCallback(receiveOptions, this.buoyWs, t)
+                .then((response) => {
+                    resolve({payload: response})
+                })
+                .catch((error) => {
+                    reject(error)
+                })
 
             // Update status
             ui?.prompt({
@@ -275,7 +298,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
 
             const signUrl = `${this.webAuthenticatorUrl}/sign?sealed=${sealedRequest.toString(
                 'hex'
-            )}&nonce=${nonce.toString()}&chain=${context.chain?.name}&accountName=${
+            )}&nonce=${nonce.toString()}&chain=${context.chain?.id}&accountName=${
                 context.accountName
             }&permissionName=${context.permissionName}&appName=${
                 context.appName

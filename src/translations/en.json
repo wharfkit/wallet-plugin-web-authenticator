@@ -1,0 +1,8 @@
+{
+    "error": {
+        "expired": "The request expired, please try again.",
+        "invalid_response": "Invalid response from wallet, must contain link_ch, link_key, link_name and cid flags.",
+        "not_completed": "The request was not completed.",
+        "cancelled": "The request was cancelled."
+    }
+}
