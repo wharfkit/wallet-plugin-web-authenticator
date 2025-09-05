@@ -98,18 +98,25 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             const t = ui?.getTranslate(this.id)
 
             // Show status message using WharfKit UI
-            ui?.status('Opening authenticator popup...')
+            ui?.status('Opening wallet window...')
 
             let popup: Window | null = window.open(url, 'Web Authenticator', 'width=450,height=750')
 
             if (!popup) {
-                throw new Error('Popup blocked - please enable popups for this site')
+                this.manualPopupShown = true
+                return this.showManualPopupPrompt(url, receiveOptions, ui)
+                    .then((response) => {
+                        resolve(response)
+                    })
+                    .catch((error) => {
+                        reject(error)
+                    })
             }
 
             // Update status
             ui?.prompt({
                 title: 'Approve',
-                body: 'Please approve the transaction in the popup that just opened',
+                body: 'Please approve the transaction in the wallet window.',
                 elements: [],
             })
 
@@ -132,7 +139,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             // Update status
             ui?.prompt({
                 title: 'Approve',
-                body: 'Please approve the transaction in the popup that just opened',
+                body: 'Please approve the transaction in the wallet window.',
                 elements: [],
             })
 
@@ -172,13 +179,13 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     ): Promise<{payload: CallbackPayload}> {
         return new Promise((resolve, reject) => {
             ui?.prompt({
-                title: 'Popup blocked',
-                body: `The popup was blocked. Please open it manually.`,
+                title: 'Pop-up blocked',
+                body: `Pop-up blocked by your browser. Open the wallet window manually.`,
                 elements: [
                     {
                         type: 'button',
                         data: {
-                            label: 'Trigger Popup',
+                            label: 'Open Wallet',
                             onClick: () => {
                                 this.openPopup(url, receiveOptions, ui)
                                     .then((response) => {
