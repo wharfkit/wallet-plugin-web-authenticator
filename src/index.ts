@@ -41,7 +41,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     private webAuthenticatorUrl: string
     private buoyServiceUrl: string
     private buoyWs?: WebSocket
-    private manualPopupShown = false
 
     constructor(options: WebAuthenticatorOptions = {}) {
         super()
@@ -107,7 +106,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             )
 
             if (!popup) {
-                this.manualPopupShown = true
                 return this.showManualPopupPrompt(url, receiveOptions, ui)
                     .then((response) => {
                         resolve(response)
@@ -168,7 +166,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 })
                 .finally(() => {
                     clearInterval(checkClosedInterval)
-                    this.manualPopupShown = false
                 })
         })
     }
