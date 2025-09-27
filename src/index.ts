@@ -228,8 +228,8 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 context.ui
             )
 
-            this.data.privateKey = String(privateKey)
-            this.data.publicKey = payload.link_key
+            this.data.encryptionKey = String(privateKey)
+            this.data.messageKey = payload.link_key
 
             if (!payload.cid) {
                 throw new Error('Login failed: No chain ID returned')
@@ -274,7 +274,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     ): Promise<WalletPluginSignResponse> {
         try {
             // Ensure we have a request key from login
-            if (!this.data.privateKey || !this.data.publicKey) {
+            if (!this.data.encryptionKey || !this.data.messageKey) {
                 throw new Error('No request keys available - please login first')
             }
 
@@ -299,8 +299,8 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
 
             const sealedRequest = await sealMessage(
                 modifiedRequest.encode(),
-                PrivateKey.from(this.data.privateKey),
-                PublicKey.from(this.data.publicKey),
+                PrivateKey.from(this.data.encryptionKey),
+                PublicKey.from(this.data.messageKey),
                 nonce
             )
 
@@ -310,7 +310,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 context.accountName
             }&permissionName=${context.permissionName}&appName=${
                 context.appName
-            }&requestKey=${String(PrivateKey.from(this.data.privateKey).toPublic())}`
+            }&requestKey=${String(PrivateKey.from(this.data.encryptionKey).toPublic())}`
 
             const response = await this.openPopup(signUrl, callback, context.ui)
 
