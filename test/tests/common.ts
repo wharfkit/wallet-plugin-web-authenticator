@@ -1,5 +1,5 @@
 import {Chains, SessionKit} from '@wharfkit/session'
-import {PermissionLevel, Signature, APIClient, PrivateKey} from '@wharfkit/antelope'
+import {APIClient, PermissionLevel, PrivateKey, Signature} from '@wharfkit/antelope'
 import {
     mockChainDefinition,
     mockPermissionLevel,
@@ -9,21 +9,21 @@ import {
 } from '@wharfkit/mock-data'
 import {assert} from 'chai'
 import {
-    LoginContext,
-    ResolvedSigningRequest,
-    TransactContext,
-    ChainDefinition,
     ABICacheInterface,
-    WalletPluginSignResponse,
-    UserInterface,
     Cancelable,
+    ChainDefinition,
+    CreateAccountContext,
+    LoginContext,
+    LoginHooks,
     PromptArgs,
     PromptResponse,
+    ResolvedSigningRequest,
+    TransactContext,
     TransactHooks,
-    LoginHooks,
-    UserInterfaceLoginResponse,
+    UserInterface,
     UserInterfaceAccountCreationResponse,
-    CreateAccountContext,
+    UserInterfaceLoginResponse,
+    WalletPluginSignResponse,
 } from '@wharfkit/session'
 
 import {WalletPluginWebAuthenticator} from '$lib'
@@ -235,8 +235,8 @@ suite('wallet plugin', function () {
         // Use different keys for the sign test to avoid channel ID conflicts
         const signPrivateKey = PrivateKey.generate('K1')
         const signPublicKey = signPrivateKey.toPublic()
-        plugin.data.privateKey = signPrivateKey
-        plugin.data.publicKey = signPublicKey
+        plugin.data.encryptionKey = signPrivateKey
+        plugin.data.messageKey = signPublicKey
 
         const mockResolvedSigningRequest = await makeMockResolvedSigningRequest()
 
