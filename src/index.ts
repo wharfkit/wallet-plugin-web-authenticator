@@ -29,8 +29,8 @@ import WebSocket from 'isomorphic-ws'
 import defaultTranslations from './translations'
 
 interface WebAuthenticatorOptions {
-    /** The URL of the web authenticator service */
-    webAuthenticatorUrl?: string
+    /** The URLs for the web authenticator service, keyed by chain ID */
+    urls: Record<string, string>
     /** The buoy service URL for messaging */
     buoyServiceUrl?: string
     /** The buoy WebSocket for messaging */
@@ -38,13 +38,13 @@ interface WebAuthenticatorOptions {
 }
 
 export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implements WalletPlugin {
-    private webAuthenticatorUrl: string
+    private urls: Record<string, string>
     private buoyServiceUrl: string
     private buoyWs?: WebSocket
 
-    constructor(options: WebAuthenticatorOptions = {}) {
+    constructor(options: WebAuthenticatorOptions) {
         super()
-        this.webAuthenticatorUrl = options.webAuthenticatorUrl || 'http://localhost:5174'
+        this.urls = options.urls
         this.buoyServiceUrl = options.buoyServiceUrl || 'https://cb.anchor.link'
         this.buoyWs = options?.buoyWs
     }
@@ -84,6 +84,24 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
      * The translations for this plugin
      */
     translations = defaultTranslations
+
+    getChainUrl(context: LoginContext | TransactContext): string {
+        // default to first
+        let url = this.urls[0]
+
+        // override if chain specified
+        if (context.chain) {
+            url = this.urls[String(context.chain.id)]
+        }
+
+        if (!url) {
+            throw new Error(
+                `No web authenticator URL configured for chain ID: ${context.chain?.id}`
+            )
+        }
+
+        return url
+    }
 
     /**
      * Opens a popup window with the given URL and waits for it to complete
@@ -218,7 +236,8 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 privateKey,
             } = await createIdentityRequest(context, this.buoyServiceUrl)
 
-            const loginUrl = `${this.webAuthenticatorUrl}/sign?esr=${request.encode()}&chain=${
+            const url = this.getChainUrl(context)
+            const loginUrl = `${url}/sign?esr=${request.encode()}&chain=${
                 context.chain?.id
             }&requestKey=${requestKey}`
 
@@ -304,7 +323,8 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 nonce
             )
 
-            const signUrl = `${this.webAuthenticatorUrl}/sign?sealed=${sealedRequest.toString(
+            const url = this.getChainUrl(context)
+            const signUrl = `${url}/sign?sealed=${sealedRequest.toString(
                 'hex'
             )}&nonce=${nonce.toString()}&chain=${context.chain?.id}&accountName=${
                 context.accountName
