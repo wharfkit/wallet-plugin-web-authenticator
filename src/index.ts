@@ -122,29 +122,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 elements: [],
             })
 
-            const checkClosed = setInterval(() => {
-                if (popup?.closed) {
-                    clearInterval(checkClosed)
-                    ui?.status('Transaction cancelled')
-                    reject(new Error('Transaction cancelled by user'))
-                }
-            }, 1000)
-
-            waitForCallback(receiveOptions, this.buoyWs, t)
-                .then((response) => {
-                    resolve({payload: response})
-                })
-                .catch((error) => {
-                    reject(error)
-                })
-
-            // Update status
-            ui?.prompt({
-                title: 'Approve',
-                body: 'Please approve the transaction in the wallet window.',
-                elements: [],
-            })
-
             const checkClosedInterval = setInterval(() => {
                 if (popup?.closed) {
                     clearInterval(checkClosedInterval)
