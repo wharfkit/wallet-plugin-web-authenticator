@@ -184,7 +184,10 @@ suite('wallet plugin', function () {
 
     test('login functionality', async function () {
         const plugin = new WalletPluginWebAuthenticator({
-            webAuthenticatorUrl: 'https://web-authenticator.greymass.com',
+            urls: {
+                '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d':
+                    'https://web-authenticator.greymass.com',
+            },
         })
 
         // Mock login context
@@ -229,7 +232,10 @@ suite('wallet plugin', function () {
 
     test('sign functionality', async function () {
         const plugin = new WalletPluginWebAuthenticator({
-            webAuthenticatorUrl: 'https://web-authenticator.greymass.com',
+            urls: {
+                '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d':
+                    'https://web-authenticator.greymass.com',
+            },
         })
 
         // Use different keys for the sign test to avoid channel ID conflicts
@@ -275,7 +281,10 @@ suite('wallet plugin', function () {
 
     test('popup success with UI feedback', async function () {
         const plugin = new WalletPluginWebAuthenticator({
-            webAuthenticatorUrl: 'https://web-authenticator.greymass.com',
+            urls: {
+                '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d':
+                    'https://web-authenticator.greymass.com',
+            },
         })
 
         // Mock login context with UI
