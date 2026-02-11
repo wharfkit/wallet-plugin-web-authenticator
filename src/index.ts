@@ -117,10 +117,15 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             // Show status message using WharfKit UI
             ui?.status('Opening wallet window...')
 
+            const popupWidth = 450
+            const popupHeight = 750
+            const left = Math.round(window.screenX + (window.outerWidth - popupWidth) / 2)
+            const top = Math.round(window.screenY + (window.outerHeight - popupHeight) / 2)
+
             const popup: Window | null = window.open(
                 url,
                 'Web Authenticator',
-                'width=450,height=750'
+                `width=${popupWidth},height=${popupHeight},left=${left},top=${top}`
             )
 
             if (!popup) {
