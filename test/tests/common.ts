@@ -1,5 +1,5 @@
 import {Chains, SessionKit} from '@wharfkit/session'
-import {PermissionLevel, Signature, APIClient, PrivateKey} from '@wharfkit/antelope'
+import {APIClient, PermissionLevel, PrivateKey, Signature} from '@wharfkit/antelope'
 import {
     mockChainDefinition,
     mockPermissionLevel,
@@ -9,21 +9,21 @@ import {
 } from '@wharfkit/mock-data'
 import {assert} from 'chai'
 import {
-    LoginContext,
-    ResolvedSigningRequest,
-    TransactContext,
-    ChainDefinition,
     ABICacheInterface,
-    WalletPluginSignResponse,
-    UserInterface,
     Cancelable,
+    ChainDefinition,
+    CreateAccountContext,
+    LoginContext,
+    LoginHooks,
     PromptArgs,
     PromptResponse,
+    ResolvedSigningRequest,
+    TransactContext,
     TransactHooks,
-    LoginHooks,
-    UserInterfaceLoginResponse,
+    UserInterface,
     UserInterfaceAccountCreationResponse,
-    CreateAccountContext,
+    UserInterfaceLoginResponse,
+    WalletPluginSignResponse,
 } from '@wharfkit/session'
 
 import {WalletPluginWebAuthenticator} from '$lib'
@@ -184,7 +184,10 @@ suite('wallet plugin', function () {
 
     test('login functionality', async function () {
         const plugin = new WalletPluginWebAuthenticator({
-            webAuthenticatorUrl: 'https://web-authenticator.greymass.com',
+            urls: {
+                '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d':
+                    'https://web-authenticator.greymass.com',
+            },
         })
 
         // Mock login context
@@ -229,14 +232,17 @@ suite('wallet plugin', function () {
 
     test('sign functionality', async function () {
         const plugin = new WalletPluginWebAuthenticator({
-            webAuthenticatorUrl: 'https://web-authenticator.greymass.com',
+            urls: {
+                '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d':
+                    'https://web-authenticator.greymass.com',
+            },
         })
 
         // Use different keys for the sign test to avoid channel ID conflicts
         const signPrivateKey = PrivateKey.generate('K1')
         const signPublicKey = signPrivateKey.toPublic()
-        plugin.data.privateKey = signPrivateKey
-        plugin.data.publicKey = signPublicKey
+        plugin.data.encryptionKey = signPrivateKey
+        plugin.data.messageKey = signPublicKey
 
         const mockResolvedSigningRequest = await makeMockResolvedSigningRequest()
 
@@ -275,7 +281,10 @@ suite('wallet plugin', function () {
 
     test('popup success with UI feedback', async function () {
         const plugin = new WalletPluginWebAuthenticator({
-            webAuthenticatorUrl: 'https://web-authenticator.greymass.com',
+            urls: {
+                '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d':
+                    'https://web-authenticator.greymass.com',
+            },
         })
 
         // Mock login context with UI

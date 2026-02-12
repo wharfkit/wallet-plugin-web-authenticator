@@ -29,8 +29,8 @@ import WebSocket from 'isomorphic-ws'
 import defaultTranslations from './translations'
 
 interface WebAuthenticatorOptions {
-    /** The URL of the web authenticator service */
-    webAuthenticatorUrl?: string
+    /** The URLs for the web authenticator service, keyed by chain ID */
+    urls: Record<string, string>
     /** The buoy service URL for messaging */
     buoyServiceUrl?: string
     /** The buoy WebSocket for messaging */
@@ -38,13 +38,13 @@ interface WebAuthenticatorOptions {
 }
 
 export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implements WalletPlugin {
-    private webAuthenticatorUrl: string
+    private urls: Record<string, string>
     private buoyServiceUrl: string
     private buoyWs?: WebSocket
 
-    constructor(options: WebAuthenticatorOptions = {}) {
+    constructor(options: WebAuthenticatorOptions) {
         super()
-        this.webAuthenticatorUrl = options.webAuthenticatorUrl || 'http://localhost:5174'
+        this.urls = options.urls
         this.buoyServiceUrl = options.buoyServiceUrl || 'https://cb.anchor.link'
         this.buoyWs = options?.buoyWs
     }
@@ -85,6 +85,24 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
      */
     translations = defaultTranslations
 
+    getChainUrl(context: LoginContext | TransactContext): string {
+        // default to first
+        let url = this.urls[0]
+
+        // override if chain specified
+        if (context.chain) {
+            url = this.urls[String(context.chain.id)]
+        }
+
+        if (!url) {
+            throw new Error(
+                `No web authenticator URL configured for chain ID: ${context.chain?.id}`
+            )
+        }
+
+        return url
+    }
+
     /**
      * Opens a popup window with the given URL and waits for it to complete
      */
@@ -99,10 +117,15 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             // Show status message using WharfKit UI
             ui?.status('Opening wallet window...')
 
+            const popupWidth = 450
+            const popupHeight = 750
+            const left = Math.round(window.screenX + (window.outerWidth - popupWidth) / 2)
+            const top = Math.round(window.screenY + (window.outerHeight - popupHeight) / 2)
+
             const popup: Window | null = window.open(
                 url,
                 'Web Authenticator',
-                'width=450,height=750'
+                `width=${popupWidth},height=${popupHeight},left=${left},top=${top}`
             )
 
             if (!popup) {
@@ -114,29 +137,6 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                         reject(error)
                     })
             }
-
-            // Update status
-            ui?.prompt({
-                title: 'Approve',
-                body: 'Please approve the transaction in the wallet window.',
-                elements: [],
-            })
-
-            const checkClosed = setInterval(() => {
-                if (popup?.closed) {
-                    clearInterval(checkClosed)
-                    ui?.status('Transaction cancelled')
-                    reject(new Error('Transaction cancelled by user'))
-                }
-            }, 1000)
-
-            waitForCallback(receiveOptions, this.buoyWs, t)
-                .then((response) => {
-                    resolve({payload: response})
-                })
-                .catch((error) => {
-                    reject(error)
-                })
 
             // Update status
             ui?.prompt({
@@ -218,7 +218,8 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 privateKey,
             } = await createIdentityRequest(context, this.buoyServiceUrl)
 
-            const loginUrl = `${this.webAuthenticatorUrl}/sign?esr=${request.encode()}&chain=${
+            const url = this.getChainUrl(context)
+            const loginUrl = `${url}/sign?esr=${request.encode()}&chain=${
                 context.chain?.id
             }&requestKey=${requestKey}`
 
@@ -228,8 +229,8 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
                 context.ui
             )
 
-            this.data.privateKey = String(privateKey)
-            this.data.publicKey = payload.link_key
+            this.data.encryptionKey = String(privateKey)
+            this.data.messageKey = payload.link_key
 
             if (!payload.cid) {
                 throw new Error('Login failed: No chain ID returned')
@@ -274,7 +275,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
     ): Promise<WalletPluginSignResponse> {
         try {
             // Ensure we have a request key from login
-            if (!this.data.privateKey || !this.data.publicKey) {
+            if (!this.data.encryptionKey || !this.data.messageKey) {
                 throw new Error('No request keys available - please login first')
             }
 
@@ -299,18 +300,19 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
 
             const sealedRequest = await sealMessage(
                 modifiedRequest.encode(),
-                PrivateKey.from(this.data.privateKey),
-                PublicKey.from(this.data.publicKey),
+                PrivateKey.from(this.data.encryptionKey),
+                PublicKey.from(this.data.messageKey),
                 nonce
             )
 
-            const signUrl = `${this.webAuthenticatorUrl}/sign?sealed=${sealedRequest.toString(
+            const url = this.getChainUrl(context)
+            const signUrl = `${url}/sign?sealed=${sealedRequest.toString(
                 'hex'
             )}&nonce=${nonce.toString()}&chain=${context.chain?.id}&accountName=${
                 context.accountName
             }&permissionName=${context.permissionName}&appName=${
                 context.appName
-            }&requestKey=${String(PrivateKey.from(this.data.privateKey).toPublic())}`
+            }&requestKey=${String(PrivateKey.from(this.data.encryptionKey).toPublic())}`
 
             const response = await this.openPopup(signUrl, callback, context.ui)
 
