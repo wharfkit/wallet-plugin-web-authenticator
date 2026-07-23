@@ -1,1 +1,8 @@
-{}
+{
+    "error": {
+        "expired": "請求已過期，請重試。",
+        "invalid_response": "無效的錢包回應，必須包含link_ch, link_key, link_name和cid標識符。",
+        "not_completed": "此請求未完成。",
+        "cancelled": "請求已取消。"
+    }
+}

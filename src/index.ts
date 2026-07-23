@@ -28,6 +28,22 @@ import WebSocket from 'isomorphic-ws'
 
 import defaultTranslations from './translations'
 
+export function openPopupWindow(url: string): Window | null {
+    const width = 450
+    const height = 750
+    const left = Math.round(window.screenX + (window.outerWidth - width) / 2)
+    const top = Math.round(window.screenY + (window.outerHeight - height) / 2)
+    return window.open(
+        url,
+        'web-authenticator',
+        `width=${width},height=${height},left=${left},top=${top}`
+    )
+}
+
+export function openWallet(url: string): Window | null {
+    return openPopupWindow(url)
+}
+
 interface WebAuthenticatorOptions {
     /** The URLs for the web authenticator service, keyed by chain ID */
     urls: Record<string, string>
@@ -117,16 +133,7 @@ export class WalletPluginWebAuthenticator extends AbstractWalletPlugin implement
             // Show status message using WharfKit UI
             ui?.status('Opening wallet window...')
 
-            const popupWidth = 450
-            const popupHeight = 750
-            const left = Math.round(window.screenX + (window.outerWidth - popupWidth) / 2)
-            const top = Math.round(window.screenY + (window.outerHeight - popupHeight) / 2)
-
-            const popup: Window | null = window.open(
-                url,
-                'Web Authenticator',
-                `width=${popupWidth},height=${popupHeight},left=${left},top=${top}`
-            )
+            const popup = openPopupWindow(url)
 
             if (!popup) {
                 return this.showManualPopupPrompt(url, receiveOptions, ui)
