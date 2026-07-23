@@ -1,1 +1,8 @@
-{}
+{
+    "error": {
+        "expired": "请求已过期，请重试。",
+        "invalid_response": "无效的钱包响应，必须包含link_ch, link_key, link_name和cid标识符。",
+        "not_completed": "此请求未完成。",
+        "cancelled": "请求已取消。"
+    }
+}

@@ -1,1 +1,8 @@
-{}
+{
+    "error": {
+        "expired": "요청이 만료되었습니다. 다시 시도해 주세요.",
+        "invalid_response": "지갑의 응답이 유효하지 않습니다. link_ch, link_key, link_name 및 cid 플래그가 포함되어야 합니다.",
+        "not_completed": "요청이 완료되지 않았습니다.",
+        "cancelled": "요청이 취소되었습니다."
+    }
+}
