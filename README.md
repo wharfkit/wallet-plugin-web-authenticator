@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> This package lives in the WharfKit monorepo at [wharfkit/js/packages/wallet-plugin-web-authenticator](https://github.com/wharfkit/js/tree/dev/packages/wallet-plugin-web-authenticator), and this repository is archived. Open new issues and pull requests on [wharfkit/js](https://github.com/wharfkit/js).
+
 # Web Authenticator Wallet Plugin for Wharf
 
 > ⚠️ **WARNING**: This project is currently under development and not ready for production use. Use at your own risk.
